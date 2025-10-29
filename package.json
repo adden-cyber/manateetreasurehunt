@@ -1,0 +1,23 @@
+{
+  "name": "manatee-treasure-hunt",
+  "version": "1.0.0",
+  "description": "A 2D minigame where a manatee hunts for treasures underwater",
+  "scripts": {
+    "start": "http-server -o"
+  },
+  "keywords": [
+    "game",
+    "manatee",
+    "treasure",
+    "hunt"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "canvas-to-image": "^2.2.5",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "http-server": "^14.1.1",
+    "mongoose": "^8.18.2"
+  }
+}
