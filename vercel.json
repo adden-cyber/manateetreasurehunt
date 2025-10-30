@@ -2,7 +2,7 @@
     "rewrites": [
       {
         "source": "/api/(.*)",
-        "destination": "https://treasurehuntbackend-qy2q.onrender.com"
+        "destination": "https://treasurehuntbackend-qy2q.onrender.com/api/$1"
       }
     ]
   }
