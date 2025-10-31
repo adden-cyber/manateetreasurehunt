@@ -940,7 +940,7 @@ function updateViewportSize() {
   // Compute requested viewport (world pixels visible)
   // Clamp so viewport never exceeds the world size.
   VIEWPORT_WIDTH = Math.min(Math.round(cssWidth * zoom), GAME_WIDTH);
-  VIEWPORT_HEIGHT = Math.min(Math.round(cssHeight * zoom), GAME_HEIGHT);
+VIEWPORT_HEIGHT = Math.min(Math.round(cssHeight * zoom), GAME_HEIGHT);
 
   // For very large worlds keep aspect ratio of CSS viewport so scaling looks natural
   // (This keeps UI pixel sizes stable while the backing store is larger.)
@@ -1011,116 +1011,108 @@ function drawMermaids() {
 
 
 /* Fix drawMinimap(): change const -> let for MM_X/MM_Y to allow reassignment on mobile */
+// Replace drawMinimap() with this safer, smaller, top-right minimap
+
 function drawMinimap() {
-  const MM_WIDTH = 240;
-  const MM_HEIGHT = 180;
-  const MM_MARGIN = 20;
-  let MM_X = MM_MARGIN;
-  let MM_Y = VIEWPORT_HEIGHT - MM_HEIGHT - MM_MARGIN;
+  if (!ctx || !canvas) return;
 
-  if (isMobile) {
-    MM_X = MM_MARGIN; // left edge
-    MM_Y = VIEWPORT_HEIGHT / 2 - MM_HEIGHT / 2; // vertical center
-  }
+  // Smaller minimap dimensions (backing pixels will be scaled by DPR when drawing)
+  const MM_WIDTH_CSS = 160;  // desired visible CSS width
+  const MM_HEIGHT_CSS = 120; // desired visible CSS height
+  const dpr = window.devicePixelRatio || 1;
 
+  // Convert to backing pixels used by the canvas context
+  const MM_WIDTH = Math.round(MM_WIDTH_CSS * dpr);
+  const MM_HEIGHT = Math.round(MM_HEIGHT_CSS * dpr);
+
+  // Padding from top-right (CSS pixels)
+  const PAD_RIGHT = 12;
+  const PAD_TOP = 56; // leave space below HUD
+
+  // Convert to backing-coordinates for drawing origin
+  const canvasCssWidth = canvas.clientWidth || window.innerWidth;
+  const canvasCssHeight = canvas.clientHeight || window.innerHeight;
+  const originX = Math.round((canvasCssWidth - PAD_RIGHT - MM_WIDTH_CSS) * dpr);
+  const originY = Math.round((PAD_TOP) * dpr);
+
+  // Use an identity transform for minimap drawing (backing pixels)
   ctx.save();
-  ctx.globalAlpha = 0.7;
-  ctx.fillStyle = "#222";
-  ctx.fillRect(MM_X, MM_Y, MM_WIDTH, MM_HEIGHT);
-  ctx.globalAlpha = 1;
+  try {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-  ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(MM_X, MM_Y, MM_WIDTH, MM_HEIGHT);
+    // Background box with slight translucency
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#0b2a38';
+    ctx.fillRect(originX, originY, MM_WIDTH, MM_HEIGHT);
 
-  const scaleX = MM_WIDTH / GAME_WIDTH;
-  const scaleY = MM_HEIGHT / GAME_HEIGHT;
+    // Border
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.lineWidth = Math.max(1, Math.round(dpr));
+    ctx.strokeRect(originX, originY, MM_WIDTH, MM_HEIGHT);
 
-  ctx.save();
-  ctx.globalAlpha = 0.45;
-  ctx.fillStyle = "#2b3e2f";
-  for (const w of walls) {
-    ctx.fillRect(
-      MM_X + w.x * scaleX,
-      MM_Y + w.y * scaleY,
-      Math.max(1, w.width * scaleX),
-      Math.max(1, w.height * scaleY)
-    );
-  }
-  ctx.restore();
+    // Compute scale factors between world and minimap (based on GAME_WIDTH / GAME_HEIGHT)
+    const scaleX = MM_WIDTH / GAME_WIDTH;
+    const scaleY = MM_HEIGHT / GAME_HEIGHT;
 
-  // Real treasures only
-  ctx.save();
-  ctx.globalAlpha = 0.8;
-  for (const t of treasures) {
-    if (!t.collected && t.type !== "fake") {
-      ctx.fillStyle = "#ffd700";
+    // Draw walls (scaled)
+    ctx.globalAlpha = 0.45;
+    ctx.fillStyle = '#2b3e2f';
+    for (const w of walls) {
       ctx.fillRect(
-        MM_X + t.x * scaleX,
-        MM_Y + t.y * scaleY,
-        Math.max(2, CHEST_SIZE * scaleX),
-        Math.max(2, CHEST_SIZE * scaleY)
+        originX + Math.round(w.x * scaleX),
+        originY + Math.round(w.y * scaleY),
+        Math.max(1, Math.round(w.width * scaleX)),
+        Math.max(1, Math.round(w.height * scaleY))
       );
     }
-  }
-  ctx.restore();
 
-  // Mines
-  ctx.save();
-  ctx.globalAlpha = 0.8;
-  for (const mine of mines) {
-    ctx.fillStyle = "#ff3131";
+    // Draw real treasures
+    ctx.globalAlpha = 0.95;
+    for (const t of treasures) {
+      if (!t.collected && t.type !== 'fake') {
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(
+          originX + Math.round(t.x * scaleX),
+          originY + Math.round(t.y * scaleY),
+          Math.max(2, Math.round(CHEST_SIZE * scaleX)),
+          Math.max(2, Math.round(CHEST_SIZE * scaleY))
+        );
+      }
+    }
+
+    // Draw mines
+    ctx.globalAlpha = 0.9;
+    for (const mine of mines) {
+      ctx.fillStyle = '#ff3131';
+      ctx.beginPath();
+      const cx = originX + Math.round((mine.x + mine.width / 2) * scaleX);
+      const cy = originY + Math.round((mine.y + mine.height / 2) * scaleY);
+      const r = Math.max(2, Math.round(mine.width * scaleX / 2));
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Player dot
+    ctx.globalAlpha = 1;
     ctx.beginPath();
-    ctx.arc(
-      MM_X + (mine.x + mine.width / 2) * scaleX,
-      MM_Y + (mine.y + mine.height / 2) * scaleY,
-      Math.max(3, mine.width * scaleX / 2),
-      0, Math.PI * 2
-    );
+    ctx.fillStyle = '#ffe5b4';
+    const px = originX + Math.round((manatee.x + manatee.width/2) * scaleX);
+    const py = originY + Math.round((manatee.y + manatee.height/2) * scaleY);
+    ctx.arc(px, py, Math.max(3, Math.round(6 * dpr)), 0, Math.PI * 2);
     ctx.fill();
+
+    // Camera viewport box (small rectangle)
+    ctx.strokeStyle = '#76e3ff';
+    ctx.lineWidth = Math.max(1, Math.round(dpr));
+    const camX = originX + Math.round(cameraX * scaleX);
+    const camY = originY + Math.round(cameraY * scaleY);
+    const camW = Math.max(2, Math.round(VIEWPORT_WIDTH * scaleX));
+    const camH = Math.max(2, Math.round(VIEWPORT_HEIGHT * scaleY));
+    ctx.strokeRect(camX, camY, camW, camH);
+
+  } finally {
+    ctx.restore();
   }
-  ctx.restore();
-
-  // Collectible seaweed
-  ctx.save();
-  ctx.globalAlpha = 0.9;
-  for (const s of collectibleSeaweeds) {
-    if (!s.collected) {
-      ctx.fillStyle = "#00ff88";
-      ctx.fillRect(
-        MM_X + s.x * scaleX,
-        MM_Y + s.y * scaleY,
-        Math.max(3, s.width * scaleX / 3),
-        Math.max(6, s.height * scaleY / 8)
-      );
-    }
-  }
-  ctx.restore();
-
-  // Camera viewport box
-  ctx.strokeStyle = "#76e3ff";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(
-    MM_X + cameraX * scaleX,
-    MM_Y + cameraY * scaleY,
-    VIEWPORT_WIDTH * scaleX,
-    VIEWPORT_HEIGHT * scaleY
-  );
-
-  // Player dot
-  ctx.beginPath();
-  ctx.arc(
-    MM_X + (manatee.x + manatee.width / 2) * scaleX,
-    MM_Y + (manatee.y + manatee.height / 2) * scaleY,
-    8, 0, Math.PI * 2
-  );
-  ctx.fillStyle = "#ffe5b4";
-  ctx.strokeStyle = "#555";
-  ctx.lineWidth = 1;
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.restore();
 }
 
 function generateMazeWalls() {
@@ -3761,8 +3753,8 @@ window.addEventListener('beforeunload', () => {
       cameraY = Math.round(manateeCenterY - VIEWPORT_HEIGHT / 2);
     
       // clamp so we never show beyond the map edges
-      cameraX = Math.max(0, Math.min(GAME_WIDTH - VIEWPORT_WIDTH, cameraX));
-      cameraY = Math.max(0, Math.min(GAME_HEIGHT - VIEWPORT_HEIGHT, cameraY));
+      cameraX = Math.max(0, Math.min(GAME_WIDTH - VIEWPORT_WIDTH, cameraX || 0));
+cameraY = Math.max(0, Math.min(GAME_HEIGHT - VIEWPORT_HEIGHT, cameraY || 0));
     
       // Apply screenshake offsets (if active)
       cameraX += screenshakeX;

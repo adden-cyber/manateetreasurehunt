@@ -1603,4 +1603,85 @@ button:hover, .difficulty-btn:hover {
   will-change: transform;
   touch-action: none;
 }
+
+/* Add or replace these rules in your styles.css or <style> block */
+
+/* Make HUD pill more compact and ensure it doesn't force layout overflow */
+#game-screen .game-info {
+  position: fixed !important;
+  top: 14px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  display: inline-flex !important;
+  gap: 8px !important;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, rgba(6,30,50,0.95), rgba(6,30,50,0.82));
+  padding: 4px 8px !important;
+  border-radius: 10px;
+  backdrop-filter: blur(6px) saturate(1.05);
+  border: 1px solid rgba(255,255,255,0.05);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.55);
+  z-index: 12000 !important;
+  font-size: 0.82rem;
+  pointer-events: auto;
+  width: auto !important;
+  max-width: calc(100% - 120px) !important; /* leave room for toggle */
+}
+
+/* HUD items: smaller and tighter */
+#game-screen .game-info .score,
+#game-screen .game-info .treasures,
+#game-screen .game-info .timer {
+  padding: 3px 6px;
+  font-weight: 800;
+  color: #e6fbff;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  font-size: 0.80em;
+}
+
+/* Make toggle-hud-button a small floating pill at top-right, always visible during the game */
+#toggle-hud-button {
+  position: fixed !important;
+  right: 12px !important;
+  top: 12px !important;
+  z-index: 13000 !important;
+  font-size: 0.88em;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.92);
+  color: #08303a;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  border: none;
+  pointer-events: auto;
+  opacity: 0.98;
+}
+
+/* Smaller toggle on narrow screens */
+@media (max-width: 480px) {
+  #toggle-hud-button { font-size: 0.8em; padding: 5px 8px; border-radius: 10px; }
+  #game-screen .game-info { top: 10px; font-size: 0.76rem; padding: 4px 6px; gap: 6px; }
+}
+
+/* Minimaps: add a subtle frame and reduce default size (applied if drawMinimap draws to given constants) */
+.minimap-frame {
+  position: absolute;
+  right: 12px;
+  top: 56px; /* below HUD */
+  width: 160px;     /* visual container we use as reference in CSS */
+  height: 120px;
+  background: rgba(0,0,0,0.18);
+  border: 2px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 12500;
+  pointer-events: none;
+}
+
+/* canvas background fallback (prevents a visible band under HUD for small viewports) */
+#game-canvas {
+  background-color: #183244; /* slightly different than fill gradient to avoid 'cut' look */
+}
 /* End of file */
