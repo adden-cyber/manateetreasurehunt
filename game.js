@@ -912,7 +912,6 @@ let VIEWPORT_WIDTH = window.innerWidth;
 let VIEWPORT_HEIGHT = window.innerHeight;
 
 
-// REPLACE existing updateViewportSize() with this function
 function updateViewportSize() {
   // CSS-visible viewport in CSS pixels (matches window)
   const cssWidth = window.innerWidth;
@@ -925,7 +924,14 @@ function updateViewportSize() {
   // Tunable zoom factors (higher => see more of the world)
   const DESKTOP_ZOOM = 1.50; // 1.5x wider view on desktop
   const TABLET_ZOOM  = 1.25; // moderate zoom on mid-size screens
-  const MOBILE_ZOOM  = 1.25; // gentle zoom on phones so controls still feel responsive
+
+  // Make mobile use the same field-of-view (FOV) as desktop.
+  // This prevents the "too-close" feeling and avoids camera breakage
+  // introduced by aggressive mobile-only zoom adjustments.
+  //
+  // If you prefer a slightly different mobile FOV later, change this
+  // to a number close to DESKTOP_ZOOM (e.g. 1.35).
+  const MOBILE_ZOOM  = DESKTOP_ZOOM;
 
   let zoom = DESKTOP_ZOOM;
   if (isNarrow) zoom = MOBILE_ZOOM;
@@ -2340,7 +2346,6 @@ if (registerSuccessPopup) {
   };
 }
 
-// Replace existing setHUDVisible(visible) with this improved, mobile-compact version
 function setHUDVisible(visible) {
   const hudEls = document.querySelectorAll('#game-screen .game-info');
 
@@ -2367,15 +2372,20 @@ function setHUDVisible(visible) {
       // ignore style application failures on some browsers
     }
 
-    // Show/hide while keeping layout stable
+    // Show/hide while keeping layout stable:
     if (visible) {
       el.style.setProperty('visibility', 'visible', 'important');
       el.style.setProperty('opacity', '1', 'important');
       el.style.setProperty('display', 'inline-flex', 'important');
     } else {
+      // Hide the HUD visually but keep it in the flow for accessibility decisions
+      // (we do NOT remove the element from the layout entirely by leaving display none
+      // on the element because doing so would remove any control UI such as the toggle).
+      // Instead we set visibility:hidden and opacity:0 so it's hidden but toggles remain usable.
       el.style.setProperty('visibility', 'hidden', 'important');
       el.style.setProperty('opacity', '0', 'important');
-      el.style.setProperty('display', 'none', 'important');
+      // still set display to 'inline-flex' to avoid side-effects where other code relies on display
+      el.style.setProperty('display', 'inline-flex', 'important');
     }
   });
 
@@ -2407,18 +2417,31 @@ function setHUDVisible(visible) {
     });
   }
 
-  // Update toggle button(s) visibility. Only show toggle when game is actually running.
+  // Update toggle button(s) visibility.
+  // Keep the toggle visible whenever we are in the game-screen so users can toggle HUD back on.
   document.querySelectorAll('#game-screen #toggle-hud-button').forEach(btn => {
     try {
       btn.textContent = hudVisible ? 'Hide HUD' : 'Show HUD';
       btn.style.setProperty('z-index', '1600', 'important');
 
-      if (window.gameActive && hudVisible) {
+      // Always keep toggle visible when on the game screen and the game is active,
+      // but if the game has not started yet, keep it hidden to avoid confusion.
+      if (window.gameActive) {
+        // Make the toggle visually subtle when HUD is hidden
         btn.style.setProperty('display', 'block', 'important');
         btn.style.setProperty('pointer-events', 'auto', 'important');
         btn.style.removeProperty('visibility');
         btn.style.removeProperty('opacity');
+        if (!hudVisible) {
+          // slightly reduce prominence while still being interactive
+          try {
+            btn.style.opacity = '0.85';
+          } catch (e) {}
+        } else {
+          try { btn.style.opacity = ''; } catch (e) {}
+        }
       } else {
+        // If the game is not running, keep toggle hidden to avoid clutter
         btn.style.setProperty('display', 'none', 'important');
         btn.style.setProperty('pointer-events', 'none', 'important');
       }
