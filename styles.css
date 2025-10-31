@@ -1661,19 +1661,20 @@ button:hover, .difficulty-btn:hover {
 
 /* Smaller toggle on narrow screens */
 @media (max-width: 480px) {
-  #toggle-hud-button { font-size: 0.8em; padding: 5px 8px; border-radius: 10px; }
-  #game-screen .game-info { top: 10px; font-size: 0.76rem; padding: 4px 6px; gap: 6px; }
+  #game-screen .game-info { top: 50px; font-size: 0.68rem; padding: 3px 6px; gap: 6px; }
+  .minimap-frame { left: 8px; top: 50px; width: 130px; height: 88px; }
+  #toggle-hud-button { right: 8px; top: 8px; font-size: 0.78em; padding: 5px 8px; border-radius: 10px; }
 }
 
 /* Minimaps: add a subtle frame and reduce default size (applied if drawMinimap draws to given constants) */
 .minimap-frame {
-  position: absolute;
-  right: 12px;
-  top: 56px; /* below HUD */
-  width: 160px;     /* visual container we use as reference in CSS */
-  height: 120px;
-  background: rgba(0,0,0,0.18);
-  border: 2px solid rgba(255,255,255,0.06);
+  position: fixed;
+  left: 10px;
+  top: 48px;                /* align under HUD (same top as HUD) */
+  width: 140px;             /* slightly smaller to avoid center overlap */
+  height: 100px;
+  background: rgba(0,0,0,0.16);
+  border: 1px solid rgba(255,255,255,0.06);
   border-radius: 8px;
   padding: 4px;
   z-index: 12500;
@@ -1682,6 +1683,6 @@ button:hover, .difficulty-btn:hover {
 
 /* canvas background fallback (prevents a visible band under HUD for small viewports) */
 #game-canvas {
-  background-color: #183244; /* slightly different than fill gradient to avoid 'cut' look */
+  background-color: #183244;
 }
 /* End of file */
