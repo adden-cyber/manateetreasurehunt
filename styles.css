@@ -1661,8 +1661,8 @@ button:hover, .difficulty-btn:hover {
 
 /* Smaller toggle on narrow screens */
 @media (max-width: 480px) {
-  #game-screen .game-info { top: 50px; font-size: 0.68rem; padding: 3px 6px; gap: 6px; }
-  .minimap-frame { left: 8px; top: 50px; width: 130px; height: 88px; }
+  #game-screen .game-info { top: 54px; font-size: 0.66rem; padding: 3px 6px; gap: 6px; }
+  .minimap-frame { left: 8px; top: 54px; width: 128px; height: 88px; }
   #toggle-hud-button { right: 8px; top: 8px; font-size: 0.78em; padding: 5px 8px; border-radius: 10px; }
 }
 
@@ -1670,15 +1670,16 @@ button:hover, .difficulty-btn:hover {
 .minimap-frame {
   position: fixed;
   left: 10px;
-  top: 48px;                /* align under HUD (same top as HUD) */
-  width: 140px;             /* slightly smaller to avoid center overlap */
-  height: 100px;
-  background: rgba(0,0,0,0.16);
+  top: 56px;                /* directly under the HUD (match HUD top) */
+  width: 136px;             /* compact */
+  height: 96px;
+  background: rgba(7,28,38,0.16);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 8px;
   padding: 4px;
   z-index: 12500;
   pointer-events: none;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.28);
 }
 
 /* canvas background fallback (prevents a visible band under HUD for small viewports) */

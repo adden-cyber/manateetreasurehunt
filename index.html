@@ -60,9 +60,9 @@
   font-size: 0.86em;
   padding: 6px 10px;
   border-radius: 12px;
-  background: rgba(255,255,255,0.95);
+  background: rgba(255,255,255,0.96);
   color: #08303a;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  box-shadow: 0 6px 22px rgba(0,0,0,0.36);
   border: none;
   pointer-events: auto;
   opacity: 0.98;
@@ -319,24 +319,26 @@
  */
  #game-screen .game-info {
   position: fixed !important;
-  top: 48px !important;                 /* moved down so it is under the HUD toggle */
+  top: 52px !important;                 /* lowered to sit under the HUD toggle */
   left: 50% !important;
   transform: translateX(-50%) !important;
   display: inline-flex !important;
   gap: 6px !important;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, rgba(6,30,50,0.95), rgba(6,30,50,0.82));
-  padding: 3px 6px !important;          /* reduced padding */
+  background: linear-gradient(180deg, rgba(6,30,50,0.98), rgba(6,30,50,0.86));
+  padding: 4px 8px !important;          /* compact padding */
   border-radius: 8px;
   backdrop-filter: blur(6px) saturate(1.05);
-  border: 1px solid rgba(255,255,255,0.05);
-  box-shadow: 0 6px 14px rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.045);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.55);
   z-index: 12000 !important;
   font-size: 0.72rem;                   /* smaller text */
   pointer-events: auto;
   width: auto !important;
-  max-width: calc(100% - 100px) !important; /* leave room for the toggle on the right */
+  max-width: calc(100% - 110px) !important; /* leave room for the toggle on the right */
+  visibility: visible;                  /* safe default */
+  opacity: 1;
 }
 
  /* HUD items (light text on dark pill) */
@@ -350,6 +352,7 @@
   box-shadow: none;
   border: none;
   font-size: 0.72em;
+  line-height: 1;
 }
 
  /* End game button inside HUD (smaller) */

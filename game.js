@@ -979,48 +979,15 @@ function isColliding(rect1, rect2) {
 
 
 // --- Mermaid Drawing ---
-function drawMermaids() {
-  for (const mermaid of mermaids) {
-    const img = ASSETS.images.mermaid;
-    if (img && img.complete) {
-      ctx.save();
-      ctx.drawImage(
-        img,
-        mermaid.x - cameraX,
-        mermaid.y - cameraY,
-        mermaid.width,
-        mermaid.height
-      );
-      ctx.restore();
-    } else {
-      ctx.save();
-      ctx.beginPath();
-      ctx.ellipse(
-        mermaid.x + mermaid.width/2 - cameraX,
-        mermaid.y + mermaid.height/2 - cameraY,
-        mermaid.width/2, mermaid.height/2,
-        0, 0, Math.PI * 2
-      );
-      ctx.fillStyle = MERMAID_COLOR;
-      ctx.fill();
-      ctx.restore();
-    }
-  }
-}
-
-
-
-/* Fix drawMinimap(): change const -> let for MM_X/MM_Y to allow reassignment on mobile */
-// Replace drawMinimap() with this safer, smaller, top-right minimap
-
+// drawMinimap(): compact fixed minimap placed top-left under HUD (DPR-aware)
 function drawMinimap() {
   if (!ctx || !canvas) return;
 
-  // Desired visible CSS size of minimap (matches .minimap-frame)
-  const MM_CSS_W = 140;
-  const MM_CSS_H = 100;
+  // CSS size matches .minimap-frame in styles
+  const MM_CSS_W = 136;
+  const MM_CSS_H = 96;
   const PAD_LEFT_CSS = 10;    // same as .minimap-frame left
-  const PAD_TOP_CSS = 48;     // same as .minimap-frame top (under the HUD)
+  const PAD_TOP_CSS = 56;     // same as .minimap-frame top
 
   const dpr = window.devicePixelRatio || 1;
 
@@ -1028,22 +995,18 @@ function drawMinimap() {
   const MM_W = Math.round(MM_CSS_W * dpr);
   const MM_H = Math.round(MM_CSS_H * dpr);
 
-  // Compute origin in backing pixels relative to canvas backing size.
-  // canvas.clientWidth/Height are CSS pixels; multiply by dpr to get backing pixels.
-  const canvasCssW = canvas.clientWidth || window.innerWidth;
-  const canvasCssH = canvas.clientHeight || window.innerHeight;
-
+  // Origin in backing pixels relative to canvas origin
   const originX = Math.round(PAD_LEFT_CSS * dpr);
   const originY = Math.round(PAD_TOP_CSS * dpr);
 
-  // Save and draw in backing pixel coordinates with identity transform
   ctx.save();
   try {
+    // Draw in backing pixels with identity transform for crispness
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // Background box
+    // Background box (slightly translucent)
     ctx.globalAlpha = 0.88;
-    ctx.fillStyle = '#0b2a38';
+    ctx.fillStyle = '#062a36';
     ctx.fillRect(originX, originY, MM_W, MM_H);
 
     // Border
@@ -1051,11 +1014,11 @@ function drawMinimap() {
     ctx.lineWidth = Math.max(1, Math.round(dpr));
     ctx.strokeRect(originX, originY, MM_W, MM_H);
 
-    // scales from world -> minimap
+    // Compute scale of world -> minimap
     const scaleX = MM_W / GAME_WIDTH;
     const scaleY = MM_H / GAME_HEIGHT;
 
-    // Draw walls (low-alpha so map features are visible but unobtrusive)
+    // Draw walls (subtle)
     ctx.globalAlpha = 0.45;
     ctx.fillStyle = '#2b3e2f';
     for (const w of walls) {
@@ -1067,7 +1030,7 @@ function drawMinimap() {
       );
     }
 
-    // Draw real treasures
+    // Draw treasures (real)
     ctx.globalAlpha = 0.95;
     for (const t of treasures) {
       if (!t.collected && t.type !== 'fake') {
@@ -1081,13 +1044,13 @@ function drawMinimap() {
       }
     }
 
-    // Draw mines as small red dots
+    // Draw mines as small dots
     ctx.globalAlpha = 0.9;
     ctx.fillStyle = '#ff3131';
     for (const m of mines) {
       const cx = originX + Math.round((m.x + m.width/2) * scaleX);
       const cy = originY + Math.round((m.y + m.height/2) * scaleY);
-      const r = Math.max(2, Math.round(4 * dpr));
+      const r = Math.max(2, Math.round(3 * dpr));
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
@@ -1099,7 +1062,7 @@ function drawMinimap() {
     const px = originX + Math.round((manatee.x + manatee.width/2) * scaleX);
     const py = originY + Math.round((manatee.y + manatee.height/2) * scaleY);
     ctx.beginPath();
-    ctx.arc(px, py, Math.max(3, Math.round(5 * dpr)), 0, Math.PI * 2);
+    ctx.arc(px, py, Math.max(3, Math.round(4 * dpr)), 0, Math.PI * 2);
     ctx.fill();
 
     // Camera rectangle
@@ -3751,11 +3714,11 @@ window.addEventListener('beforeunload', () => {
     
       // Attempt to keep camera centered, but clamp to world edges
       cameraX = Math.round(manateeCenterX - VIEWPORT_WIDTH / 2);
-      cameraY = Math.round(manateeCenterY - VIEWPORT_HEIGHT / 2);
+cameraY = Math.round(manateeCenterY - VIEWPORT_HEIGHT / 2);
     
       // clamp so we never show beyond the map edges
-      cameraX = Math.max(0, Math.min(GAME_WIDTH - VIEWPORT_WIDTH, cameraX || 0));
-cameraY = Math.max(0, Math.min(GAME_HEIGHT - VIEWPORT_HEIGHT, cameraY || 0));
+      cameraX = Math.max(0, Math.min(Math.max(0, GAME_WIDTH - VIEWPORT_WIDTH), cameraX || 0));
+cameraY = Math.max(0, Math.min(Math.max(0, GAME_HEIGHT - VIEWPORT_HEIGHT), cameraY || 0));
     
       // Apply screenshake offsets (if active)
       cameraX += screenshakeX;
