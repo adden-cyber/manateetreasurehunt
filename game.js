@@ -925,7 +925,7 @@ function updateViewportSize() {
   // Tunable zoom factors (higher => see more of the world)
   const DESKTOP_ZOOM = 1.50; // 1.5x wider view on desktop
   const TABLET_ZOOM  = 1.25; // moderate zoom on mid-size screens
-  const MOBILE_ZOOM  = 1.08; // gentle zoom on phones so controls still feel responsive
+  const MOBILE_ZOOM  = 0.50; // gentle zoom on phones so controls still feel responsive
 
   let zoom = DESKTOP_ZOOM;
   if (isNarrow) zoom = MOBILE_ZOOM;
