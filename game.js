@@ -1587,11 +1587,37 @@ function preloadImages(manifest, onComplete) {
 
 document.addEventListener('DOMContentLoaded',async () => {
   
-  window.addEventListener('error', (ev) => {
-  try { enqueueFailedLog({ url: `${backendBase()}/api/client-error`, method: 'POST', body: { message: ev.message, filename: ev.filename, lineno: ev.lineno, colno: ev.colno, stack: ev.error?.stack } }); } catch (e) {}
+  // Robust client-side error reporting (non-blocking)
+window.addEventListener('error', (ev) => {
+  try {
+    const payload = {
+      message: ev.message || String(ev),
+      filename: ev.filename || null,
+      lineno: ev.lineno || null,
+      colno: ev.colno || null,
+      stack: ev.error && (ev.error.stack || String(ev.error)) || null,
+      userAgent: navigator.userAgent || null,
+      ts: Date.now()
+    };
+    enqueueFailedLog({ url: `${backendBase()}/api/client-error`, method: 'POST', body: payload });
+  } catch (e) {
+    // swallow errors in the error handler to avoid recursion
+    console.warn('[client-error] enqueue failed', e);
+  }
 });
+
 window.addEventListener('unhandledrejection', (ev) => {
-  try { const r = ev.reason || {}; enqueueFailedLog({ url: `${backendBase()}/api/client-error`, method: 'POST', body: { message: r.message || String(r), stack: r.stack || null } }); } catch (e) {}
+  try {
+    const r = ev.reason || {};
+    const payload = {
+      message: r && (r.message || String(r)) || String(ev.reason || 'unhandledrejection'),
+      stack: r && (r.stack || null) || null,
+      ts: Date.now()
+    };
+    enqueueFailedLog({ url: `${backendBase()}/api/client-error`, method: 'POST', body: payload });
+  } catch (e) {
+    console.warn('[client-unhandledrejection] enqueue failed', e);
+  }
 });
 
 async function loadStartLeaderboard() {
