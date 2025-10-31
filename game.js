@@ -1016,45 +1016,46 @@ function drawMermaids() {
 function drawMinimap() {
   if (!ctx || !canvas) return;
 
-  // Smaller minimap dimensions (backing pixels will be scaled by DPR when drawing)
-  const MM_WIDTH_CSS = 160;  // desired visible CSS width
-  const MM_HEIGHT_CSS = 120; // desired visible CSS height
+  // Desired visible CSS size of minimap (matches .minimap-frame)
+  const MM_CSS_W = 140;
+  const MM_CSS_H = 100;
+  const PAD_LEFT_CSS = 10;    // same as .minimap-frame left
+  const PAD_TOP_CSS = 48;     // same as .minimap-frame top (under the HUD)
+
   const dpr = window.devicePixelRatio || 1;
 
-  // Convert to backing pixels used by the canvas context
-  const MM_WIDTH = Math.round(MM_WIDTH_CSS * dpr);
-  const MM_HEIGHT = Math.round(MM_HEIGHT_CSS * dpr);
+  // Backing pixel dimensions
+  const MM_W = Math.round(MM_CSS_W * dpr);
+  const MM_H = Math.round(MM_CSS_H * dpr);
 
-  // Padding from top-right (CSS pixels)
-  const PAD_RIGHT = 12;
-  const PAD_TOP = 56; // leave space below HUD
+  // Compute origin in backing pixels relative to canvas backing size.
+  // canvas.clientWidth/Height are CSS pixels; multiply by dpr to get backing pixels.
+  const canvasCssW = canvas.clientWidth || window.innerWidth;
+  const canvasCssH = canvas.clientHeight || window.innerHeight;
 
-  // Convert to backing-coordinates for drawing origin
-  const canvasCssWidth = canvas.clientWidth || window.innerWidth;
-  const canvasCssHeight = canvas.clientHeight || window.innerHeight;
-  const originX = Math.round((canvasCssWidth - PAD_RIGHT - MM_WIDTH_CSS) * dpr);
-  const originY = Math.round((PAD_TOP) * dpr);
+  const originX = Math.round(PAD_LEFT_CSS * dpr);
+  const originY = Math.round(PAD_TOP_CSS * dpr);
 
-  // Use an identity transform for minimap drawing (backing pixels)
+  // Save and draw in backing pixel coordinates with identity transform
   ctx.save();
   try {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // Background box with slight translucency
-    ctx.globalAlpha = 0.85;
+    // Background box
+    ctx.globalAlpha = 0.88;
     ctx.fillStyle = '#0b2a38';
-    ctx.fillRect(originX, originY, MM_WIDTH, MM_HEIGHT);
+    ctx.fillRect(originX, originY, MM_W, MM_H);
 
     // Border
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = Math.max(1, Math.round(dpr));
-    ctx.strokeRect(originX, originY, MM_WIDTH, MM_HEIGHT);
+    ctx.strokeRect(originX, originY, MM_W, MM_H);
 
-    // Compute scale factors between world and minimap (based on GAME_WIDTH / GAME_HEIGHT)
-    const scaleX = MM_WIDTH / GAME_WIDTH;
-    const scaleY = MM_HEIGHT / GAME_HEIGHT;
+    // scales from world -> minimap
+    const scaleX = MM_W / GAME_WIDTH;
+    const scaleY = MM_H / GAME_HEIGHT;
 
-    // Draw walls (scaled)
+    // Draw walls (low-alpha so map features are visible but unobtrusive)
     ctx.globalAlpha = 0.45;
     ctx.fillStyle = '#2b3e2f';
     for (const w of walls) {
@@ -1080,34 +1081,34 @@ function drawMinimap() {
       }
     }
 
-    // Draw mines
+    // Draw mines as small red dots
     ctx.globalAlpha = 0.9;
-    for (const mine of mines) {
-      ctx.fillStyle = '#ff3131';
+    ctx.fillStyle = '#ff3131';
+    for (const m of mines) {
+      const cx = originX + Math.round((m.x + m.width/2) * scaleX);
+      const cy = originY + Math.round((m.y + m.height/2) * scaleY);
+      const r = Math.max(2, Math.round(4 * dpr));
       ctx.beginPath();
-      const cx = originX + Math.round((mine.x + mine.width / 2) * scaleX);
-      const cy = originY + Math.round((mine.y + mine.height / 2) * scaleY);
-      const r = Math.max(2, Math.round(mine.width * scaleX / 2));
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
     }
 
     // Player dot
     ctx.globalAlpha = 1;
-    ctx.beginPath();
     ctx.fillStyle = '#ffe5b4';
     const px = originX + Math.round((manatee.x + manatee.width/2) * scaleX);
     const py = originY + Math.round((manatee.y + manatee.height/2) * scaleY);
-    ctx.arc(px, py, Math.max(3, Math.round(6 * dpr)), 0, Math.PI * 2);
+    ctx.beginPath();
+    ctx.arc(px, py, Math.max(3, Math.round(5 * dpr)), 0, Math.PI * 2);
     ctx.fill();
 
-    // Camera viewport box (small rectangle)
+    // Camera rectangle
     ctx.strokeStyle = '#76e3ff';
     ctx.lineWidth = Math.max(1, Math.round(dpr));
     const camX = originX + Math.round(cameraX * scaleX);
     const camY = originY + Math.round(cameraY * scaleY);
-    const camW = Math.max(2, Math.round(VIEWPORT_WIDTH * scaleX));
-    const camH = Math.max(2, Math.round(VIEWPORT_HEIGHT * scaleY));
+    const camW = Math.max(3, Math.round(VIEWPORT_WIDTH * scaleX));
+    const camH = Math.max(3, Math.round(VIEWPORT_HEIGHT * scaleY));
     ctx.strokeRect(camX, camY, camW, camH);
 
   } finally {
