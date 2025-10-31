@@ -53,20 +53,15 @@
             margin: 0 8px;
         }
         #toggle-hud-button {
-  position: fixed !important;
-  right: 10px !important;
-  top: 10px !important;
-  z-index: 13000 !important;
-  font-size: 0.86em;
-  padding: 6px 10px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.96);
-  color: #08303a;
-  box-shadow: 0 6px 22px rgba(0,0,0,0.36);
-  border: none;
-  pointer-events: auto;
-  opacity: 0.98;
-}
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 1100;
+            font-size: 1.1em;
+            padding: 8px 16px;
+            opacity: 0.9;
+            pointer-events: auto;
+        }
         .logo {
             margin-bottom: 18px;
             filter: drop-shadow(0 18px 36px rgba(0,0,0,0.45));
@@ -136,8 +131,8 @@
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 8px; /* tightened */
-          margin-top: 8px; /* moved slightly up */
+          gap: 8px; /* tightened */;
+          margin-top: 8px; /* moved slightly up */;
         }
         .menu-buttons .buttons-row {
           display: flex;
@@ -182,7 +177,7 @@
 
         /* left column (history) */
         #user-sessions-container {
-          flex: 0 0 260px;         /* fixed-ish narrow column */
+          flex: 0 0 260px;         /* fixed-ish narrow column */;
           max-width: 260px;
           min-width: 220px;
           margin-top: 6px;
@@ -190,11 +185,11 @@
 
         /* center column (main card) */
         .start-ui {
-          flex: 0 0 520px;         /* center card narrower than before */
+          flex: 0 0 520px;         /* center card narrower than before */;
           max-width: 520px;
           width: 100%;
           background: linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.08));
-          /* smaller top padding and explicit top-alignment so content sits higher */
+          /* smaller top padding and explicit top-alignment so content sits higher */;
           padding: 14px 26px 28px 26px;
           border-radius: 18px;
           box-sizing: border-box;
@@ -221,7 +216,7 @@
           height: auto;
         }
         .start-ui h1 {
-          font-size: 34px;          /* reduced from very large */
+          font-size: 34px;          /* reduced from very large */;
           line-height: 1.05;
           margin: 6px 0 10px;
           text-shadow: 0 6px 18px rgba(0,160,200,0.22);
@@ -318,42 +313,43 @@
     - Adjusted: slightly larger top spacing and much smaller typography & padding
  */
  #game-screen .game-info {
-  position: fixed !important;
-  top: 52px !important;                 /* lowered to sit under the HUD toggle */
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  display: inline-flex !important;
-  gap: 6px !important;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(180deg, rgba(6,30,50,0.98), rgba(6,30,50,0.86));
-  padding: 4px 8px !important;          /* compact padding */
-  border-radius: 8px;
-  backdrop-filter: blur(6px) saturate(1.05);
-  border: 1px solid rgba(255,255,255,0.045);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.55);
-  z-index: 12000 !important;
-  font-size: 0.72rem;                   /* smaller text */
-  pointer-events: auto;
-  width: auto !important;
-  max-width: calc(100% - 110px) !important; /* leave room for the toggle on the right */
-  visibility: visible;                  /* safe default */
-  opacity: 1;
-}
+   position: fixed !important;
+   top: 22px !important; /* moved further from the very top */
+   left: 50% !important;
+   transform: translateX(-50%) !important;
+   display: inline-flex !important;
+   gap: 6px; /* tightened */
+   align-items: center;
+   justify-content: center;
+   background: linear-gradient(180deg, rgba(6,30,50,0.85), rgba(6,30,50,0.65));
+   padding: 4px 8px !important; /* smaller */
+   border-radius: 10px;
+   backdrop-filter: blur(6px) saturate(1.05);
+   border: 1px solid rgba(255,255,255,0.06);
+   box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+   z-index: 99999 !important; /* very high so it sits above canvas and panels */
+   pointer-events: auto;
+   min-width: 0;
+   width: auto !important;     /* IMPORTANT: do not stretch */
+   max-width: none !important; /* IMPORTANT: do not stretch */
+   box-sizing: content-box;
+   margin: 0 auto;
+   font-size: 0.88rem; /* smaller overall HUD typography */
+ }
 
  /* HUD items (light text on dark pill) */
  #game-screen .game-info .score,
-#game-screen .game-info .treasures,
-#game-screen .game-info .timer {
-  padding: 2px 6px;
-  font-weight: 800;
-  color: #e6fbff;
-  background: transparent;
-  box-shadow: none;
-  border: none;
-  font-size: 0.72em;
-  line-height: 1;
-}
+ #game-screen .game-info .treasures,
+ #game-screen .game-info .timer {
+   background: transparent;
+   color: #dff8ff;
+   padding: 3px 6px; /* reduced */
+   border-radius: 6px;
+   font-weight: 800;
+   box-shadow: none;
+   border: none;
+   font-size: 0.82em; 
+ }
 
  /* End game button inside HUD (smaller) */
  #game-screen .game-info #end-game-button {
