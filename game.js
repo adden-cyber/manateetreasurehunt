@@ -1,7 +1,3 @@
-// Restored and cleaned full game.js (validated for syntax).
-// This version corresponds to the earlier working state we had before the UI changes.
-// Paste this entire file into your repo (overwrite existing game.js) and reload your site.
-
 let selectedDifficulty = "normal"; // Default difficulty
 const DIFFICULTY_CREDIT_COST = { easy: 100, normal: 150, hard: 250 };
 let userCredits = null;
@@ -21,12 +17,14 @@ const MANATEE_DEBRIS_PARTS = [
 
 let GAME_CONFIG = {};
 
-// --- Credits / Start button helpers ---
+/* Helper: update credits UI and local state */
+// --- Credits helpers and Start-button UI helpers (paste this BEFORE setCredits) ---
 let creditsCountdownInterval = null;
 
+// Compute next midnight in GMT+8 expressed as a UTC Date
 function getNextGmt8MidnightUtc() {
   const now = new Date();
-  const offsetMs = 8 * 3600 * 1000; // +8 hours
+  const offsetMs = 8 * 3600 * 1000; // +8 hours in milliseconds
   const nowGmt8 = new Date(now.getTime() + offsetMs);
   const y = nowGmt8.getUTCFullYear();
   const m = nowGmt8.getUTCMonth();
@@ -46,20 +44,30 @@ function formatTimeRemainingTo(nextUtcDate) {
   return `${h}:${m}:${s} (GMT+8)`;
 }
 
+// Update Start button disabled state and (optionally) its label.
+// If you call updateStartButtonUI() before startButton exists, it will try the cached var when available.
 function updateStartButtonUI(customLabel) {
   const sb = startButton || document.getElementById('start-button');
   if (!sb) return;
   const cost = DIFFICULTY_CREDIT_COST[selectedDifficulty] || 10;
 
+  // Disable reasons: request in flight, not logged in, or not enough credits
   const notLoggedIn = !userToken;
   const noCredits = (typeof userCredits === 'number' ? (userCredits < cost) : false);
   const disabled = !!startRequestInFlight || notLoggedIn || noCredits;
 
+  // Native disabled state
   sb.disabled = disabled;
+
+  // IMPORTANT: also manage pointer-events so an inline "pointer-events: none" left behind
+  // by other code cannot make the button visually enabled but unclickable.
   try {
     sb.style.pointerEvents = disabled ? 'none' : 'auto';
-  } catch (e) {}
+  } catch (e) {
+    // ignore styling failures
+  }
 
+  // Helpful tooltip so users know *why* the button is disabled
   if (startRequestInFlight) {
     sb.title = 'Starting — please wait';
   } else if (notLoggedIn) {
@@ -89,7 +97,8 @@ function refreshFeedbackButton() {
   }
 }
 
-// Initialize difficulty cost display
+// show initial difficulty cost for the active difficulty
+// Safe initialization of difficulty cost display — runs now if DOM ready, or on DOMContentLoaded otherwise
 (function initDifficultyCostDisplay() {
   function applyCost() {
     const costDisplay = document.getElementById('difficulty-cost-display');
@@ -109,14 +118,19 @@ function refreshFeedbackButton() {
   }
 })();
 
+// Call this to restore Start button to idle state (used after game end)
 function ensureStartButtonIdle() {
+  // Reset label/state centrally
   updateStartButtonUI('Start');
+
+  // Defensively restore pointer-events in case any wrapper set it to 'none' and forgot to clear it.
   const sb = startButton || document.getElementById('start-button');
   if (sb) {
     try { sb.style.pointerEvents = 'auto'; } catch (e) {}
   }
 }
-
+// --- end helpers ---
+// Replace existing setCredits function with this block
 function setCredits(value) {
   const n = (value === undefined || value === null) ? NaN : Number(value);
   const ok = !Number.isNaN(n);
@@ -124,6 +138,7 @@ function setCredits(value) {
   const el = document.getElementById('credits-value');
   if (el) el.textContent = ok ? String(n) : '--';
 
+  // Persist authoritative credit value so a page refresh shows the real amount
   try {
     if (ok) {
       localStorage.setItem('credits', String(n));
@@ -131,35 +146,48 @@ function setCredits(value) {
       localStorage.removeItem('credits');
     }
   } catch (e) {
+    // If localStorage is unavailable (private mode, etc.), just continue
     console.warn('[setCredits] localStorage unavailable', e);
   }
 
+  // Update Start button disabled state (but don't change label here)
   const sb = startButton || document.getElementById('start-button');
-  if (sb) updateStartButtonUI();
+  if (sb) {
+    // Centralize logic so titles/tooltips and in-flight state are applied consistently
+    updateStartButtonUI();
+  }
 
+  // Credits message element (inserted into HTML; see index.html snippet below)
   const msgEl = document.getElementById('credits-msg');
+
+  // Clear any existing interval if credits are > 0
   if (creditsCountdownInterval) {
     clearInterval(creditsCountdownInterval);
     creditsCountdownInterval = null;
   }
 
   if (ok && n <= 0) {
+    // Show used-up message and start countdown to next GMT+8 midnight
     if (msgEl) {
       const nextUtc = getNextGmt8MidnightUtc();
+      // initial set
       msgEl.textContent = `All points have been used up, come back by tomorrow! (${formatTimeRemainingTo(nextUtc)})`;
       msgEl.style.color = '#b00';
+      // update every second
       creditsCountdownInterval = setInterval(() => {
         const remainingText = formatTimeRemainingTo(nextUtc);
-        if (msgEl) msgEl.textContent = `All points have been used up, come back by tomorrow! (${remainingText})`;
+        msgEl.textContent = `All points have been used up, come back by tomorrow! (${remainingText})`;
       }, 1000);
     }
   } else {
-    if (msgEl) msgEl.textContent = '';
+    if (msgEl) {
+      msgEl.textContent = '';
+    }
   }
-
   try {
+    // keep end-screen indicators up to date whenever credits change
     if (typeof updateEndScreenCredits === 'function') updateEndScreenCredits();
-  } catch (e) {}
+  } catch (e) { /* ignore */ }
 }
 
 function updateEndScreenCredits() {
@@ -167,6 +195,7 @@ function updateEndScreenCredits() {
     const cost = DIFFICULTY_CREDIT_COST[selectedDifficulty] || 0;
     const n = (typeof userCredits === 'number') ? userCredits : null;
 
+    // Completion popup elements
     const remainingEl = document.getElementById('credits-remaining-value-completion');
     const warnEl = document.getElementById('credits-warning-completion');
     const playBtn = document.getElementById('completion-play-again-button');
@@ -190,6 +219,7 @@ function updateEndScreenCredits() {
       }
     }
 
+    // Quit popup elements
     const remainingElQ = document.getElementById('credits-remaining-value-quit');
     const warnElQ = document.getElementById('credits-warning-quit');
     const playBtnQ = document.getElementById('quit-play-again-button');
@@ -217,7 +247,6 @@ function updateEndScreenCredits() {
   }
 }
 
-// Assets & manifest
 const ASSETS = {
   images: {
     mermaid: null,
@@ -226,7 +255,12 @@ const ASSETS = {
     bubble: null,
     coral: null,
     mine: null,
-    treasures: { small: null, medium: null, large: null, fake: null },
+    treasures: {
+      small: null,
+      medium: null,
+      large: null,
+      fake: null
+    },
     manateeVariants: []
   },
   sounds: {
@@ -252,14 +286,14 @@ const imageManifest = [
   { key: 'fake', path: 'images/treasure_fake.png', assign: img => { img.width=60; img.height=60; img.penalty=5; ASSETS.images.treasures.fake = img; } }
 ];
 
-// Backend URL
+// Replace the existing BACKEND_URL line with this block
 const DEFAULT_BACKEND_URL = "http://192.168.0.114:3001/api";
 const BACKEND_URL = (typeof window !== 'undefined' && (
   window.__BACKEND_URL_OVERRIDE ||
-  (document.querySelector && document.querySelector('meta[name="backend-url"]')?.getAttribute('content'))
+  (document.querySelector && document.querySelector('meta[name=\"backend-url\"]')?.getAttribute('content'))
 )) || DEFAULT_BACKEND_URL;
 
-// fetchWithTimeout
+/* 2) Small helper: fetch with timeout (prevents hanging on mobile) */
 async function fetchWithTimeout(url, options = {}, timeoutMs = 7000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -271,6 +305,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 7000) {
   }
 }
 
+/* Safe JSON parse: returns parsed JSON or null on empty/invalid body */
 async function safeParseJson(res) {
   if (!res) return null;
   if (res.status === 204) return null;
@@ -281,6 +316,9 @@ async function safeParseJson(res) {
   }
 }
 
+/* authFetch: central wrapper that injects Authorization when userToken exists.
+   Accepts options.timeoutMs (ms) — default 7000. Pass credentials: 'include' when needed.
+*/
 async function authFetch(url, options = {}) {
   const opts = Object.assign({}, options);
   const timeoutMs = (typeof opts.timeoutMs === 'number') ? opts.timeoutMs : 7000;
@@ -293,19 +331,21 @@ async function authFetch(url, options = {}) {
   }
 }
 
-// telemetry queue
+/* Persistent telemetry retry queue (stores failed logs in localStorage) */
 const FAILED_LOGS_KEY = 'failedTelemetryQueue';
 function enqueueFailedLog(entry) {
   try {
     const raw = localStorage.getItem(FAILED_LOGS_KEY) || '[]';
     const arr = JSON.parse(raw);
     arr.push(Object.assign({ ts: Date.now() }, entry));
+    // cap to last 200 entries
     while (arr.length > 200) arr.shift();
     localStorage.setItem(FAILED_LOGS_KEY, JSON.stringify(arr));
   } catch (e) {
     console.warn('[telemetry] enqueueFailedLog failed', e);
   }
 }
+// replace existing processFailedLogs() with this enhanced version
 async function processFailedLogs() {
   try {
     const raw = localStorage.getItem(FAILED_LOGS_KEY) || '[]';
@@ -319,12 +359,17 @@ async function processFailedLogs() {
           headers: createHeaders({ 'Content-Type': 'application/json' }),
           body: entry.body ? JSON.stringify(entry.body) : undefined
         }, 4000);
+
+        // Treat success OR "not found" for gameplay-endpoints as non-retryable
         if (res && (res.ok || res.status === 404)) {
+          // success (or session already cleaned up) -> do not requeue
           continue;
         } else {
+          // non-ok -> requeue
           stillFailed.push(entry);
         }
       } catch (err) {
+        // network or other failure -> requeue
         stillFailed.push(entry);
       }
     }
@@ -334,6 +379,7 @@ async function processFailedLogs() {
   }
 }
 
+/* attachIfExists: convenience to addEventListener only if element exists */
 function attachIfExists(selectorOrEl, evt, handler, options) {
   try {
     const el = (typeof selectorOrEl === 'string') ? document.querySelector(selectorOrEl) : selectorOrEl;
@@ -345,23 +391,35 @@ function attachIfExists(selectorOrEl, evt, handler, options) {
   }
 }
 
+// try immediately and schedule periodic retries
 try { processFailedLogs().catch(console.warn); } catch (e) {}
 setInterval(() => processFailedLogs().catch(console.warn), 30000);
 
+// Add this helper (place right after fetchWithTimeout or before wireFeedbackUI)
 async function sendFeedbackToServer(payload) {
   const url = `${backendBase()}/api/feedback`;
   const headers = { 'Content-Type': 'application/json' };
   if (userToken) headers['Authorization'] = `Bearer ${userToken}`;
+
+  console.debug('[feedback] sending', { email: userEmail, rating: payload.rating, textLen: (payload.text||'').length, hasToken: !!userToken });
+
   try {
     const res = await fetchWithTimeout(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
     }, 7000);
+
+    // Helpful diagnostics in console to see server response and status
+    let bodyText = '<no body>';
+    try { bodyText = await res.clone().text(); } catch (e) {}
+    console.debug('[feedback] response', { ok: !!res && res.ok, status: res && res.status, bodyPreview: bodyText.slice(0, 1000) });
+
     if (!res.ok) {
-      const errJson = await safeParseJson(res) || {};
-      throw new Error('Feedback failed: ' + (errJson.error || res.status));
-    }
+  const errJson = await safeParseJson(res) || {};
+  throw new Error('Feedback failed: ' + (errJson.error || res.status));
+}
+
     return res;
   } catch (err) {
     console.warn('[feedback] sendFeedbackToServer failed', err);
@@ -369,12 +427,15 @@ async function sendFeedbackToServer(payload) {
   }
 }
 
+
+// Utility: create headers object and include Authorization only when userToken exists
 function createHeaders(base = {}) {
   const headers = Object.assign({}, base);
   if (userToken) headers['Authorization'] = `Bearer ${userToken}`;
   return headers;
 }
 
+// Compute backend base URL (strip trailing /api if present)
 function backendBase() {
   try {
     return BACKEND_URL.endsWith('/api') ? BACKEND_URL.slice(0, -4) : BACKEND_URL;
@@ -383,9 +444,10 @@ function backendBase() {
   }
 }
 
-// default game config
+/* 3) Provide a safe default config if backend is unreachable */
 function buildOpenPattern(rows = 14, cols = 28) {
   const pattern = Array.from({ length: rows }, () => '0'.repeat(cols));
+  // Place a start 'X' roughly near top-left and one mermaid 'M' somewhere
   const rX = Math.max(1, Math.floor(rows * 0.2));
   const cX = Math.max(1, Math.floor(cols * 0.2));
   const rM = Math.min(rows - 2, Math.floor(rows * 0.7));
@@ -418,12 +480,16 @@ let sessionId = null;
 let userToken = localStorage.getItem('token') || null;
 let userEmail = localStorage.getItem('email') || null;
 let customPattern = [], TOTAL_TREASURES = 0, SEAWEED_COUNT = 0, BUBBLE_COUNT = 0, NUM_MINES = 0, GAME_TIME_SECONDS = 0;
-
-// logging start (dry-run)
+/* 5) Make start logging non-blocking: never block init on network */
+// REPLACE the existing logStartGame() with this safer dry-run-only version
+ // REPLACE existing logStartGame() with this
 function logStartGame() {
+  // never call /start for real here. This is a best-effort dry-run for diagnostics only.
   if (sessionId) return Promise.resolve();
+
   const headers = { 'Content-Type': 'application/json', 'X-Dry-Run': '1' };
   if (userToken) headers['Authorization'] = `Bearer ${userToken}`;
+
   return fetchWithTimeout(`${backendBase()}/api/start`, {
     method: "POST",
     headers,
@@ -433,12 +499,17 @@ function logStartGame() {
     if (!r.ok) return Promise.reject(new Error(`start dry-run ${r.status}`));
     return safeParseJson(r);
   })
+  .then(data => {
+    // don't mutate sessionId here — this must only be set by the real /start response
+    return data;
+  })
   .catch(err => {
     console.warn('[game] logStartGame failed (non-blocking):', err);
     return null;
   });
 }
 
+/* Telemetry: send events with timeout and enqueue failed attempts for retry */
 function logChest(chest) {
   const url = `${backendBase()}/api/chest`;
   const payload = { sessionId, x: chest.x, y: chest.y, value: chest.value, type: chest.type };
@@ -454,8 +525,8 @@ function logChest(chest) {
     }
   })
   .catch(err => {
-    enqueueFailedLog({ url, method: 'POST', body: payload });
     console.warn('[logChest] failed, queued for retry', err);
+    enqueueFailedLog({ url, method: 'POST', body: payload });
   });
 }
 
@@ -474,8 +545,8 @@ function logBubble(bubble) {
     }
   })
   .catch(err => {
-    enqueueFailedLog({ url, method: 'POST', body: payload });
     console.warn('[logBubble] failed, queued for retry', err);
+    enqueueFailedLog({ url, method: 'POST', body: payload });
   });
 }
 
@@ -494,11 +565,12 @@ function logMineDeath() {
     }
   })
   .catch(err => {
-    enqueueFailedLog({ url, method: 'POST', body: payload });
     console.warn('[logMineDeath] failed, queued for retry', err);
+    enqueueFailedLog({ url, method: 'POST', body: payload });
   });
 }
 
+// Replace existing logEndGame(...) with this updated implementation
 function logEndGame(endedEarly = false) {
   const url = `${backendBase()}/api/end`;
   const payload = {
@@ -515,24 +587,34 @@ function logEndGame(endedEarly = false) {
   }, 4000)
   .then(async res => {
     if (!res.ok) {
+      // try to parse error body for diagnostics (non-blocking)
       const errJson = await safeParseJson(res).catch(()=>null);
       enqueueFailedLog({ url, method: 'POST', body: payload });
       console.warn('[logEndGame] non-ok, queued for retry', res.status, errJson);
       return;
     }
+    // If server returns JSON, apply credits if provided
     try {
       const data = await safeParseJson(res) || {};
-      if (data && typeof data.credits === 'number') {
-        setCredits(data.credits);
+      if (data && data.refunded) {
+        console.info('[logEndGame] server indicates credits were refunded for session', payload.sessionId);
       }
-    } catch (e) {}
+      if (data && typeof data.credits === 'number') {
+        // update client-side credits immediately
+        setCredits(data.credits);
+        console.info('[logEndGame] updated client credits to', data.credits);
+      }
+    } catch (e) {
+      // ignore parse errors
+    }
   })
   .catch(err => {
-    enqueueFailedLog({ url, method: 'POST', body: payload });
     console.warn('[logEndGame] failed, queued for retry', err);
+    enqueueFailedLog({ url, method: 'POST', body: payload });
   });
 }
 
+// Replace existing getGameReport
 async function getGameReport() {
   try {
     const res = await authFetch(`${backendBase()}/api/report`, { timeoutMs: 7000 });
@@ -544,7 +626,7 @@ async function getGameReport() {
   }
 }
 
-// DOM refs and state
+// DOM references
 let startScreen, gameScreen, completionPopup, quitResultPopup;
 let startButton, completionPlayAgainButton, completionReturnToStartButton;
 let quitPlayAgainButton, quitReturnToStartButton;
@@ -556,7 +638,7 @@ let completionTitle, completionMessage, quitTitle, quitMessage;
 let canvas, ctx;
 let confettiCameraX = 0, confettiCameraY = 0, confettiViewportWidth = 0, confettiViewportHeight = 0;
 let celebrationTimer = 0;
-let celebrationActive = false;
+let celebrationActive = false
 function stopAnimationLoop() {
   if (rafId !== null) {
     cancelAnimationFrame(rafId);
@@ -566,13 +648,15 @@ function stopAnimationLoop() {
 let isGameOver = false;
 let rafId = null;
 
-let hudVisible = true;
+// Add near other globals (e.g. after `let rafId = null;`)
+let hudVisible = true;              // single global HUD visibility flag (used by setHUDVisible)
 let joystickContainer = null;
 let joystickBase = null;
 let joystickStick = null;
-let baseRect = null;
-window.selectedDifficulty = selectedDifficulty;
+let baseRect = null;             // single global HUD visibility flag (used by setHUDVisible)
+window.selectedDifficulty = selectedDifficulty; // expose for small inline scripts
 
+// Map and viewport constants
 let GAME_WIDTH = 4800, GAME_HEIGHT = 3600;
 const MANATEE_SPEED = 5;
 const CHEST_SIZE = 60;
@@ -585,24 +669,31 @@ const CHEST_SPAWN_EXCLUDE_RADIUS = 280;
 let manateeJumping = false;
 let manateeJumpFrame = 0;
 let manateeJumpCount = 0;
-const MANATEE_JUMPS_TOTAL = 3;
-const MANATEE_JUMP_DURATION = 40;
-const MANATEE_JUMP_HEIGHT = 110;
-let fakeTreasureSlowTimer = 0;
+const MANATEE_JUMPS_TOTAL = 3; // Set how many jumps you want
+const MANATEE_JUMP_DURATION = 40; // frames (about 0.66s at 60fps)
+const MANATEE_JUMP_HEIGHT = 110;  // pixels
+let fakeTreasureSlowTimer = 0; // in frames (60fps)
+// Mermaid constants and state
 const MERMAID_SPEED = MANATEE_SPEED;
 const MERMAID_SIZE = 70;
 const MERMAID_COLOR = "#db71bc";
-const MERMAID_EXCLAMATION_TIME = 60;
-const MERMAID_CHASE_TIME = 480;
+const MERMAID_EXCLAMATION_TIME = 60; // 1s at 60fps
+const MERMAID_CHASE_TIME = 480; // 8s at 60fps
 
+// Screenshake effect variables
 let screenshakeTimer = 0;
 let screenshakeMagnitude = 0;
 let screenshakeX = 0;
 let screenshakeY = 0;
 
+
+
+// Helper: get a random open cell from the map
+// Helper: get a random open cell from the map
 function getRandomOpenPosition() {
   const openCells = getValidTreasurePositions(walls);
   if (!openCells || openCells.length === 0) {
+    // fallback to center of map
     return { x: Math.max(0, GAME_WIDTH/2 - CHEST_SIZE/2), y: Math.max(0, GAME_HEIGHT/2 - CHEST_SIZE/2) };
   }
   return openCells[Math.floor(Math.random() * openCells.length)];
@@ -681,7 +772,7 @@ function updateMermaids() {
         }
       }
       if (isColliding(mermaid, manatee)) {
-        startExplosion();
+        startExplosion(); // Mermaid triggers explosion/game over
       }
       mermaid.stateTimer--;
       if (mermaid.stateTimer <= 0) {
@@ -721,7 +812,8 @@ function updateMermaids() {
   }
 }
 
-// State variables (continued)
+
+// State
 let gameActive = false, score = 0, collectedTreasures = 0, gameTimer = GAME_TIME_SECONDS, gameStartTime = 0;
 let treasures = [], walls = [], bubbles = [], seaweeds = [], corals = [];
 let mines = [];
@@ -734,13 +826,13 @@ let timeInterval = null;
 let preGameInterval = null;
 let activeSeaweedBoost = false;
 let seaweedBoostTimer = 0;
-const SEAWEED_BOOST_AMOUNT = 1.5;
-const SEAWEED_BOOST_DURATION = 8 * 60;
+const SEAWEED_BOOST_AMOUNT = 1.5; // 50% increase
+const SEAWEED_BOOST_DURATION = 8 * 60; // 8 seconds at 60fps
 const keysPressed = {};
-let mermaids = [];
+let mermaids = []; // Array of all mermaids
 let collectibleSeaweeds = [];
-let floatingRewards = [];
-let collectibleBubbles = [];
+let floatingRewards = []; // Each item: {x, y, value, alpha, vy}
+let collectibleBubbles = []; // Each: {x, y, width, height, value, collected}
 let confettiActive = false;
 let confettiParticles = [];
 
@@ -772,19 +864,21 @@ function generateCollectibleBubbles() {
   let positions = getValidTreasurePositions(walls);
   let arr = [];
   let used = new Set();
-  let count = Math.min(BUBBLE_COUNT, positions.length);
+  let count = Math.min(BUBBLE_COUNT, positions.length); // 5 bubbles per game, adjust as you like
   const values = [5, 10, 15];
 
+  // Prevent placement on top of any chest (real or fake)
   while (arr.length < count) {
     let idx = Math.floor(Math.random() * positions.length);
     if (used.has(idx)) continue;
     used.add(idx);
     const pos = positions[idx];
 
+    // Check overlap with all treasures (real and fake)
     let overlapsAnyChest = treasures.some(t =>
       Math.abs(t.x - pos.x) < CHEST_SIZE && Math.abs(t.y - pos.y) < CHEST_SIZE
     );
-    let overlapsSeaweed = collectibleSeaweeds && collectibleSeaweeds.some(s =>
+     let overlapsSeaweed = collectibleSeaweeds && collectibleSeaweeds.some(s =>
       Math.abs(s.x - pos.x) < 60 && Math.abs(s.y - pos.y) < 60
     );
 
@@ -793,7 +887,7 @@ function generateCollectibleBubbles() {
     arr.push({
       x: pos.x,
       y: pos.y,
-      width: 52,
+      width: 52, // bubble size
       height: 52,
       value: values[Math.floor(Math.random() * values.length)],
       collected: false,
@@ -803,43 +897,63 @@ function generateCollectibleBubbles() {
 }
 
 let cameraX = 0, cameraY = 0;
+
 const manatee = { x: CHEST_SIZE, y: CHEST_SIZE, width: 80, height: 60, speedX: 0, speedY: 0, moving: false, direction: 1 };
 let manateeLastX = CHEST_SIZE, manateeLastY = CHEST_SIZE;
 
 let playAgainAfterDeath = false;
 
+// MOBILE/JOYSTICK SUPPORT
 let isMobile = false;
 let joystickActive = false, joystickX = 0, joystickY = 0;
 
+// Fullscreen sizing: always use window.innerWidth/innerHeight for the canvas
 let VIEWPORT_WIDTH = window.innerWidth;
 let VIEWPORT_HEIGHT = window.innerHeight;
 
-// updateViewportSize (kept as original working implementation)
+
 function updateViewportSize() {
+  // CSS-visible viewport in CSS pixels (matches window)
   const cssWidth = window.innerWidth;
   const cssHeight = window.innerHeight;
 
+  // Decide zoom factor by device class so controls remain usable on small screens
   const isNarrow = cssWidth < 900;
   const isTablet = cssWidth >= 900 && cssWidth < 1400;
 
-  const DESKTOP_ZOOM = 1.50;
-  const TABLET_ZOOM  = 1.25;
-  const MOBILE_ZOOM  = 1.08;
+  // Tunable zoom factors (higher => see more of the world)
+  const DESKTOP_ZOOM = 1.50; // 1.5x wider view on desktop
+  const TABLET_ZOOM  = 1.25; // moderate zoom on mid-size screens
+
+  // Make mobile use the same field-of-view (FOV) as desktop.
+  // This prevents the "too-close" feeling and avoids camera breakage
+  // introduced by aggressive mobile-only zoom adjustments.
+  //
+  // If you prefer a slightly different mobile FOV later, change this
+  // to a number close to DESKTOP_ZOOM (e.g. 1.35).
+  const MOBILE_ZOOM  = DESKTOP_ZOOM;
 
   let zoom = DESKTOP_ZOOM;
   if (isNarrow) zoom = MOBILE_ZOOM;
   else if (isTablet) zoom = TABLET_ZOOM;
 
+  // Compute requested viewport (world pixels visible)
+  // Clamp so viewport never exceeds the world size.
   VIEWPORT_WIDTH = Math.min(Math.round(cssWidth * zoom), GAME_WIDTH);
-  VIEWPORT_HEIGHT = Math.min(Math.round(cssHeight * zoom), GAME_HEIGHT);
+VIEWPORT_HEIGHT = Math.min(Math.round(cssHeight * zoom), GAME_HEIGHT);
 
+  // For very large worlds keep aspect ratio of CSS viewport so scaling looks natural
+  // (This keeps UI pixel sizes stable while the backing store is larger.)
   if (!canvas) return;
 
+  // Device pixel ratio for crisp rendering on high-DPI displays
   const dpr = window.devicePixelRatio || 1;
 
+  // Backing store should be world pixels scaled by DPR
   canvas.width = Math.round(VIEWPORT_WIDTH * dpr);
   canvas.height = Math.round(VIEWPORT_HEIGHT * dpr);
 
+  // Ensure the visible size of the canvas matches the CSS viewport
   canvas.style.position = "absolute";
   canvas.style.left = "0";
   canvas.style.top = "0";
@@ -848,6 +962,7 @@ function updateViewportSize() {
   canvas.style.background = "#234";
   canvas.style.setProperty("z-index", "0", "important");
 
+  // Reset the 2D context transform so 1 canvas unit = 1 CSS pixel (scaled by DPR)
   if (ctx) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
@@ -862,12 +977,20 @@ function isColliding(rect1, rect2) {
   );
 }
 
+
+// --- Mermaid Drawing ---
 function drawMermaids() {
   for (const mermaid of mermaids) {
     const img = ASSETS.images.mermaid;
     if (img && img.complete) {
       ctx.save();
-      ctx.drawImage(img, mermaid.x - cameraX, mermaid.y - cameraY, mermaid.width, mermaid.height);
+      ctx.drawImage(
+        img,
+        mermaid.x - cameraX,
+        mermaid.y - cameraY,
+        mermaid.width,
+        mermaid.height
+      );
       ctx.restore();
     } else {
       ctx.save();
@@ -885,89 +1008,113 @@ function drawMermaids() {
   }
 }
 
-// original drawMinimap restored
+
+
+/* Fix drawMinimap(): change const -> let for MM_X/MM_Y to allow reassignment on mobile */
+// Replace drawMinimap() with this safer, smaller, top-right minimap
+
 function drawMinimap() {
-  const MM_WIDTH = 240;
-  const MM_HEIGHT = 180;
-  const MM_MARGIN = 20;
-  let MM_X = MM_MARGIN;
-  let MM_Y = VIEWPORT_HEIGHT - MM_HEIGHT - MM_MARGIN;
+  if (!ctx || !canvas) return;
 
-  if (isMobile) {
-    MM_X = MM_MARGIN;
-    MM_Y = VIEWPORT_HEIGHT / 2 - MM_HEIGHT / 2;
-  }
+  // Desired visible CSS size of minimap (matches .minimap-frame)
+  const MM_CSS_W = 140;
+  const MM_CSS_H = 100;
+  const PAD_LEFT_CSS = 10;    // same as .minimap-frame left
+  const PAD_TOP_CSS = 48;     // same as .minimap-frame top (under the HUD)
 
-  if (!ctx) return;
+  const dpr = window.devicePixelRatio || 1;
+
+  // Backing pixel dimensions
+  const MM_W = Math.round(MM_CSS_W * dpr);
+  const MM_H = Math.round(MM_CSS_H * dpr);
+
+  // Compute origin in backing pixels relative to canvas backing size.
+  // canvas.clientWidth/Height are CSS pixels; multiply by dpr to get backing pixels.
+  const canvasCssW = canvas.clientWidth || window.innerWidth;
+  const canvasCssH = canvas.clientHeight || window.innerHeight;
+
+  const originX = Math.round(PAD_LEFT_CSS * dpr);
+  const originY = Math.round(PAD_TOP_CSS * dpr);
+
+  // Save and draw in backing pixel coordinates with identity transform
   ctx.save();
-  ctx.globalAlpha = 0.7;
-  ctx.fillStyle = "#222";
-  ctx.fillRect(MM_X, MM_Y, MM_WIDTH, MM_HEIGHT);
-  ctx.globalAlpha = 1;
+  try {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-  ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(MM_X, MM_Y, MM_WIDTH, MM_HEIGHT);
+    // Background box
+    ctx.globalAlpha = 0.88;
+    ctx.fillStyle = '#0b2a38';
+    ctx.fillRect(originX, originY, MM_W, MM_H);
 
-  const scaleX = MM_WIDTH / GAME_WIDTH;
-  const scaleY = MM_HEIGHT / GAME_HEIGHT;
+    // Border
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = Math.max(1, Math.round(dpr));
+    ctx.strokeRect(originX, originY, MM_W, MM_H);
 
-  ctx.save();
-  ctx.globalAlpha = 0.45;
-  ctx.fillStyle = "#2b3e2f";
-  for (const w of walls) {
-    ctx.fillRect(MM_X + w.x * scaleX, MM_Y + w.y * scaleY, Math.max(1, w.width * scaleX), Math.max(1, w.height * scaleY));
-  }
-  ctx.restore();
+    // scales from world -> minimap
+    const scaleX = MM_W / GAME_WIDTH;
+    const scaleY = MM_H / GAME_HEIGHT;
 
-  ctx.save();
-  ctx.globalAlpha = 0.8;
-  for (const t of treasures) {
-    if (!t.collected && t.type !== "fake") {
-      ctx.fillStyle = "#ffd700";
-      ctx.fillRect(MM_X + t.x * scaleX, MM_Y + t.y * scaleY, Math.max(2, CHEST_SIZE * scaleX), Math.max(2, CHEST_SIZE * scaleY));
+    // Draw walls (low-alpha so map features are visible but unobtrusive)
+    ctx.globalAlpha = 0.45;
+    ctx.fillStyle = '#2b3e2f';
+    for (const w of walls) {
+      ctx.fillRect(
+        originX + Math.round(w.x * scaleX),
+        originY + Math.round(w.y * scaleY),
+        Math.max(1, Math.round(w.width * scaleX)),
+        Math.max(1, Math.round(w.height * scaleY))
+      );
     }
-  }
-  ctx.restore();
 
-  ctx.save();
-  ctx.globalAlpha = 0.8;
-  for (const mine of mines) {
-    ctx.fillStyle = "#ff3131";
+    // Draw real treasures
+    ctx.globalAlpha = 0.95;
+    for (const t of treasures) {
+      if (!t.collected && t.type !== 'fake') {
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(
+          originX + Math.round(t.x * scaleX),
+          originY + Math.round(t.y * scaleY),
+          Math.max(2, Math.round(CHEST_SIZE * scaleX)),
+          Math.max(2, Math.round(CHEST_SIZE * scaleY))
+        );
+      }
+    }
+
+    // Draw mines as small red dots
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#ff3131';
+    for (const m of mines) {
+      const cx = originX + Math.round((m.x + m.width/2) * scaleX);
+      const cy = originY + Math.round((m.y + m.height/2) * scaleY);
+      const r = Math.max(2, Math.round(4 * dpr));
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Player dot
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ffe5b4';
+    const px = originX + Math.round((manatee.x + manatee.width/2) * scaleX);
+    const py = originY + Math.round((manatee.y + manatee.height/2) * scaleY);
     ctx.beginPath();
-    ctx.arc(MM_X + (mine.x + mine.width / 2) * scaleX, MM_Y + (mine.y + mine.height / 2) * scaleY, Math.max(3, mine.width * scaleX / 2), 0, Math.PI * 2);
+    ctx.arc(px, py, Math.max(3, Math.round(5 * dpr)), 0, Math.PI * 2);
     ctx.fill();
+
+    // Camera rectangle
+    ctx.strokeStyle = '#76e3ff';
+    ctx.lineWidth = Math.max(1, Math.round(dpr));
+    const camX = originX + Math.round(cameraX * scaleX);
+    const camY = originY + Math.round(cameraY * scaleY);
+    const camW = Math.max(3, Math.round(VIEWPORT_WIDTH * scaleX));
+    const camH = Math.max(3, Math.round(VIEWPORT_HEIGHT * scaleY));
+    ctx.strokeRect(camX, camY, camW, camH);
+
+  } finally {
+    ctx.restore();
   }
-  ctx.restore();
-
-  ctx.save();
-  ctx.globalAlpha = 0.9;
-  for (const s of collectibleSeaweeds) {
-    if (!s.collected) {
-      ctx.fillStyle = "#00ff88";
-      ctx.fillRect(MM_X + s.x * scaleX, MM_Y + s.y * scaleY, Math.max(3, s.width * scaleX / 3), Math.max(6, s.height * scaleY / 8));
-    }
-  }
-  ctx.restore();
-
-  ctx.strokeStyle = "#76e3ff";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(MM_X + cameraX * scaleX, MM_Y + cameraY * scaleY, VIEWPORT_WIDTH * scaleX, VIEWPORT_HEIGHT * scaleY);
-
-  ctx.beginPath();
-  ctx.arc(MM_X + (manatee.x + manatee.width / 2) * scaleX, MM_Y + (manatee.y + manatee.height / 2) * scaleY, 8, 0, Math.PI * 2);
-  ctx.fillStyle = "#ffe5b4";
-  ctx.strokeStyle = "#555";
-  ctx.lineWidth = 1;
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.restore();
 }
-
-// ... (the rest of the working file continues exactly as before)
-// For brevity I stopped here; the full version above is consistent with the earlier working file
-// If you want I will paste the complete remainder now (render loop, event wiring, init, etc.).
 
 function generateMazeWalls() {
   const walls = [];
@@ -3604,11 +3751,11 @@ window.addEventListener('beforeunload', () => {
     
       // Attempt to keep camera centered, but clamp to world edges
       cameraX = Math.round(manateeCenterX - VIEWPORT_WIDTH / 2);
-cameraY = Math.round(manateeCenterY - VIEWPORT_HEIGHT / 2);
+      cameraY = Math.round(manateeCenterY - VIEWPORT_HEIGHT / 2);
     
       // clamp so we never show beyond the map edges
-      cameraX = Math.max(0, Math.min(Math.max(0, GAME_WIDTH - VIEWPORT_WIDTH), cameraX || 0));
-cameraY = Math.max(0, Math.min(Math.max(0, GAME_HEIGHT - VIEWPORT_HEIGHT), cameraY || 0));
+      cameraX = Math.max(0, Math.min(GAME_WIDTH - VIEWPORT_WIDTH, cameraX || 0));
+cameraY = Math.max(0, Math.min(GAME_HEIGHT - VIEWPORT_HEIGHT, cameraY || 0));
     
       // Apply screenshake offsets (if active)
       cameraX += screenshakeX;
