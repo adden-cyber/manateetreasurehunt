@@ -2602,7 +2602,6 @@ if (resetReturnBtn) {
     if (resetError) resetError.textContent = '';
   };
 }
-// Replace existing showScreen(...) with this robust version
 function showScreen(target) {
   // Accept either an element or an id string
   const targetEl = (typeof target === 'string') ? document.getElementById(target) : target;
@@ -2650,34 +2649,44 @@ function showScreen(target) {
 
   // HUD / joystick visibility: only visible while in game screen
   if (targetEl.id === 'game-screen') {
-    // While the client is in pre-game countdown (game not yet active),
-    // ensure the HUD and the HUD toggle button remain hidden.
-    if (!window.gameActive) {
+    // Only show the HUD toggle when the game is actually running (not during countdown).
+    // This explicitly hides the toggle during pre-game states such as "count" or "start".
+    const shouldShowToggle = !!window.gameActive && preGameState === "running";
+
+    if (!window.gameActive || !shouldShowToggle) {
+      // While the client is in pre-game countdown (game not yet active),
+      // ensure the HUD and the HUD toggle button remain hidden.
       setHUDVisible(false);
-      // Hide the toggle button reliably (use inline !important)
       document.querySelectorAll('#game-screen #toggle-hud-button').forEach(btn => {
-        try { btn.style.setProperty('display', 'none', 'important'); } catch (e) {}
+        try {
+          btn.style.setProperty('display', 'none', 'important');
+          btn.style.setProperty('pointer-events', 'none', 'important');
+        } catch (e) {}
       });
     } else {
       // Game is running — restore HUD visibility based on hudVisible flag
       setHUDVisible(!!hudVisible);
       document.querySelectorAll('#game-screen #toggle-hud-button').forEach(btn => {
-        try { btn.style.setProperty('display', 'block', 'important'); } catch (e) {}
+        try {
+          btn.style.setProperty('display', 'block', 'important');
+          btn.style.setProperty('pointer-events', 'auto', 'important');
+        } catch (e) {}
       });
     }
 
-    // Show joystick only when on mobile and gameActive
+    // Show joystick only when on mobile and the game is running
     if (typeof isMobile !== 'undefined' && isMobile && window.gameActive) {
       showJoystick(true);
     } else {
       showJoystick(false);
     }
   } else {
+    // Not the game screen: ensure HUD and joystick are hidden
     setHUDVisible(false);
     showJoystick(false);
   }
 
-  console.debug('[showScreen] switched to', targetEl.id);
+  console.debug('[showScreen] switched to', targetEl.id, { gameActive: !!window.gameActive, preGameState });
 }
 
 
