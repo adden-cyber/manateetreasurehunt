@@ -1686,4 +1686,21 @@ button:hover, .difficulty-btn:hover {
 #game-canvas {
   background-color: #183244;
 }
+
+/* Append near the HUD/toggle rules (end of file is fine).
+   This enforces a small offset on narrow screens so the HUD pill won't overlap the toggle before JS positions it. */
+   @media (max-width: 700px) {
+    #toggle-hud-button {
+      top: 10px !important;
+      right: 10px !important;
+      z-index: 16000 !important;
+    }
+    #game-screen .game-info {
+      top: 56px !important; /* leave room under the toggle by default on mobile */
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      max-width: calc(100% - 64px) !important;
+      box-sizing: border-box;
+    }
+  }
 /* End of file */

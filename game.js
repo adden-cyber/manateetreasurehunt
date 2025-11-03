@@ -2403,6 +2403,11 @@ if (registerSuccessPopup) {
   };
 }
 
+// REPLACE the setHUDVisible(...) function with this corrected version.
+// - ensures toggle stays above the HUD (toggle z-index > hud z-index)
+// - repositions HUD under the toggle on mobile
+// - exposes a small helper to reflow HUD on resize/orientation
+
 function setHUDVisible(visible) {
   const hudEls = document.querySelectorAll('#game-screen .game-info');
 
@@ -2413,7 +2418,7 @@ function setHUDVisible(visible) {
       el.style.setProperty('top', '12px', 'important');
       el.style.setProperty('left', '50%', 'important');
       el.style.setProperty('transform', 'translateX(-50%)', 'important');
-      el.style.setProperty('z-index', '1500', 'important');
+      el.style.setProperty('z-index', '12999', 'important'); // NOTE: lower than toggle by default
 
       // Use inline-flex and prevent wrapping
       el.style.setProperty('display', 'inline-flex', 'important');
@@ -2435,28 +2440,28 @@ function setHUDVisible(visible) {
       el.style.setProperty('opacity', '1', 'important');
       el.style.setProperty('display', 'inline-flex', 'important');
     } else {
-      // Hide the HUD visually but keep it in the flow for accessibility decisions
-      // (we do NOT remove the element from the layout entirely by leaving display none
-      // on the element because doing so would remove any control UI such as the toggle).
-      // Instead we set visibility:hidden and opacity:0 so it's hidden but toggles remain usable.
       el.style.setProperty('visibility', 'hidden', 'important');
       el.style.setProperty('opacity', '0', 'important');
-      // still set display to 'inline-flex' to avoid side-effects where other code relies on display
       el.style.setProperty('display', 'inline-flex', 'important');
     }
   });
 
   hudVisible = !!visible;
 
-  // Make HUD tighter on mobile to avoid spanning the whole top bar
+  // Mobile-specific shrink and placement under the toggle
   if (typeof isMobile !== 'undefined' && isMobile) {
+    const hud = document.querySelector('#game-screen .game-info');
+    const toggle = document.getElementById('toggle-hud-button');
+
     document.querySelectorAll('#game-screen .game-info').forEach(el => {
       try {
         el.style.setProperty('gap', '6px', 'important');
         el.style.setProperty('padding', '4px 8px', 'important');
         el.style.setProperty('font-size', '0.85em', 'important');
+        el.style.setProperty('max-width', 'calc(100% - 120px)', 'important'); // leave room for toggle
       } catch (e) {}
     });
+
     // Shrink individual HUD item spacing
     document.querySelectorAll('#game-screen .game-info .score, #game-screen .game-info .treasures, #game-screen .game-info .timer').forEach(item => {
       try {
@@ -2464,50 +2469,59 @@ function setHUDVisible(visible) {
         item.style.setProperty('font-size', '0.9em', 'important');
       } catch (e) {}
     });
-    // Make end-game button smaller on mobile so it doesn't force the HUD wide
-    document.querySelectorAll('#game-screen #end-game-button').forEach(btn => {
-      try {
-        btn.style.setProperty('padding', '5px 8px', 'important');
-        btn.style.setProperty('min-width', '48px', 'important');
-        btn.style.setProperty('font-size', '0.85em', 'important');
-      } catch (e) {}
-    });
+
+    // Place the HUD pill below the toggle button on mobile so it doesn't get covered.
+    try {
+      if (toggle && hud) {
+        const tRect = toggle.getBoundingClientRect();
+        const desiredTop = Math.round(tRect.bottom + 6); // 6px gap under toggle
+        hud.style.setProperty('top', `${desiredTop}px`, 'important');
+        hud.style.setProperty('left', '50%', 'important');
+        hud.style.setProperty('transform', 'translateX(-50%)', 'important');
+
+        // Ensure toggle is above HUD (toggle should be on top)
+        try {
+          toggle.style.setProperty('z-index', '13001', 'important'); // toggle above hud
+          hud.style.setProperty('z-index', '12999', 'important');   // hud below toggle
+        } catch (e) {}
+
+        // If HUD extends beyond viewport bottom, reduce padding/font minimally to fit
+        const hudRect = hud.getBoundingClientRect();
+        const overflow = hudRect.bottom - window.innerHeight;
+        if (overflow > 0) {
+          hud.style.setProperty('padding', '3px 6px', 'important');
+          hud.style.setProperty('font-size', '0.72rem', 'important');
+        }
+      }
+    } catch (e) {
+      console.warn('[setHUDVisible] mobile placement failed', e);
+    }
   }
 
-  // Update toggle button(s) visibility.
-  // Keep the toggle visible whenever we are in the game-screen so users can toggle HUD back on.
+  // Update toggle button(s) visibility (preserves your previous logic)
   document.querySelectorAll('#game-screen #toggle-hud-button').forEach(btn => {
     try {
       btn.textContent = hudVisible ? 'Hide HUD' : 'Show HUD';
-      btn.style.setProperty('z-index', '1600', 'important');
+      btn.style.setProperty('z-index', '13001', 'important'); // ensure toggle stays above HUD
 
-      // Always keep toggle visible when on the game screen and the game is active,
-      // but if the game has not started yet, keep it hidden to avoid confusion.
       if (window.gameActive) {
-        // Make the toggle visually subtle when HUD is hidden
         btn.style.setProperty('display', 'block', 'important');
         btn.style.setProperty('pointer-events', 'auto', 'important');
         btn.style.removeProperty('visibility');
         btn.style.removeProperty('opacity');
         if (!hudVisible) {
-          // slightly reduce prominence while still being interactive
-          try {
-            btn.style.opacity = '0.85';
-          } catch (e) {}
+          btn.style.opacity = '0.85';
         } else {
-          try { btn.style.opacity = ''; } catch (e) {}
+          btn.style.opacity = '';
         }
       } else {
-        // If the game is not running, keep toggle hidden to avoid clutter
         btn.style.setProperty('display', 'none', 'important');
         btn.style.setProperty('pointer-events', 'none', 'important');
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   });
 
-  // Also ensure the end-game button remains stable
+  // Keep end game button stable
   const endBtn = document.getElementById('end-game-button');
   if (endBtn) {
     try {
@@ -2517,6 +2531,18 @@ function setHUDVisible(visible) {
     } catch (e) {}
   }
 }
+
+// Ensure HUD reflow after resize/orientation so 'top' placement below toggle stays correct
+window.addEventListener('resize', () => {
+  if (window.gameActive) {
+    try { setHUDVisible(hudVisible); } catch (e) {}
+  }
+});
+window.addEventListener('orientationchange', () => {
+  if (window.gameActive) {
+    try { setHUDVisible(hudVisible); } catch (e) {}
+  }
+});
 
   
     const showReset = document.getElementById('show-reset');
@@ -2851,70 +2877,138 @@ if (startLogoutBtn) startLogoutBtn.onclick = doLogout;
     
 
    
+// REPLACE the existing mobile joystick wiring block (the block that begins with
+// "if (( 'ontouchstart' in window || (navigator.maxTouchPoints && ..." )
+// with the code below. This is intentionally compact and uses the existing globals:
+// joystickContainer, joystickBase, joystickStick, refreshBaseRect, joystickActive, joystickX, joystickY.
 
+(function installFloatingJoystick() {
+  if (!( 'ontouchstart' in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) )) return;
+  if (!joystickContainer || !joystickBase || !joystickStick) return;
 
+  // Cache original anchored position (string values allowed, e.g. "calc(...)")
+  const joystickOriginal = {
+    left: joystickContainer.style.left || window.getComputedStyle(joystickContainer).left || null,
+    bottom: joystickContainer.style.bottom || window.getComputedStyle(joystickContainer).bottom || null,
+    top: joystickContainer.style.top || window.getComputedStyle(joystickContainer).top || null,
+    right: joystickContainer.style.right || window.getComputedStyle(joystickContainer).right || null
+  };
 
-if (( 'ontouchstart' in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ) &&
-    joystickContainer && joystickBase && joystickStick) {
+  // Helpers
+  const MAX_DIST = 40; // knob radius in px (matches previous maxDist)
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+  function refreshBase() {
+    try { refreshBaseRect(); } catch (e) { /* best-effort */ }
+  }
+
+  function moveBaseToClientCenter(cx, cy) {
+    refreshBase();
+    try {
+      const baseW = joystickBase.getBoundingClientRect().width || joystickContainer.offsetWidth || 110;
+      const baseH = joystickBase.getBoundingClientRect().height || joystickContainer.offsetHeight || 110;
+      const left = Math.round(clamp(cx - baseW/2, 6, window.innerWidth - baseW - 6));
+      const top  = Math.round(clamp(cy - baseH/2, 6, window.innerHeight - baseH - 6));
+      // switch to top/left positioning while touch is active
+      joystickContainer.style.left = left + 'px';
+      joystickContainer.style.top = top + 'px';
+      joystickContainer.style.bottom = 'auto';
+      joystickContainer.style.right = 'auto';
+      refreshBase();
+    } catch (e) {
+      console.warn('[joystick] moveBaseToClientCenter failed', e);
+    }
+  }
+
+  function restoreBaseAnchored() {
+    try {
+      // Smoothly animate back to the original anchored position
+      joystickContainer.style.transition = 'left 220ms ease, top 220ms ease, bottom 220ms ease';
+      // If original used bottom/left values, restore them; otherwise fallback to sensible anchor
+      if (joystickOriginal.left !== null) joystickContainer.style.left = joystickOriginal.left;
+      else joystickContainer.style.left = '20px';
+      if (joystickOriginal.bottom !== null) {
+        joystickContainer.style.bottom = joystickOriginal.bottom;
+        joystickContainer.style.top = 'auto';
+      } else {
+        joystickContainer.style.bottom = `calc(env(safe-area-inset-bottom, 16px) + 28px)`;
+        joystickContainer.style.top = 'auto';
+      }
+      // remove transition after it finishes
+      setTimeout(() => {
+        joystickContainer.style.transition = '';
+        refreshBase();
+      }, 260);
+    } catch (e) { console.warn('[joystick] restoreBaseAnchored failed', e); }
+  }
+
+  // Ensure visible & interactive
   joystickContainer.style.pointerEvents = 'auto';
-  refreshBaseRect(); // set initial rect
-  const maxDist = 40;
+  joystickContainer.style.touchAction = 'none';
+  refreshBase();
 
-  // keep rect current
-  window.addEventListener('resize', refreshBaseRect);
-
-  joystickStick.addEventListener('touchstart', function(e) {
-    e.preventDefault();
+  // touchstart on knob
+  joystickStick.addEventListener('touchstart', function (ev) {
+    ev.preventDefault();
+    const t = ev.touches && ev.touches[0];
+    if (!t) return;
+    // Move base center to finger
+    moveBaseToClientCenter(t.clientX, t.clientY);
     joystickActive = true;
-    refreshBaseRect();
+    // clear any leftover transforms or transitions
+    joystickStick.style.transition = '';
+    joystickStick.style.transform = 'translate(0px, 0px)';
+    refreshBase();
   }, { passive: false });
 
-  window.addEventListener('touchend', function(e) {
-    joystickActive = false;
-    joystickX = 0; joystickY = 0;
-    if (baseRect && joystickStick) {
-      joystickStick.style.left = (baseRect.width/2 - joystickStick.offsetWidth/2) + 'px';
-      joystickStick.style.top = (baseRect.height/2 - joystickStick.offsetHeight/2) + 'px';
-    }
-  }, { passive: true });
+  // touching the base should also start the floating joystick
+  joystickBase.addEventListener('touchstart', function (ev) {
+    ev.preventDefault();
+    const t = ev.touches && ev.touches[0];
+    if (!t) return;
+    moveBaseToClientCenter(t.clientX, t.clientY);
+    joystickActive = true;
+    joystickStick.style.transition = '';
+    joystickStick.style.transform = 'translate(0px, 0px)';
+    refreshBase();
+  }, { passive: false });
 
-  window.addEventListener('touchmove', function(e) {
-    if (!joystickActive || !baseRect) return;
-    e.preventDefault();
-    const touch = e.touches[0];
+  // touchmove -> move knob with finger, clamped to MAX_DIST, update joystickX/Y (-1..1)
+  window.addEventListener('touchmove', function (ev) {
+    if (!joystickActive) return;
+    const t = ev.touches && ev.touches[0];
+    if (!t || !baseRect) return;
+    ev.preventDefault();
     const centerX = baseRect.left + baseRect.width / 2;
     const centerY = baseRect.top + baseRect.height / 2;
-    let dx = touch.clientX - centerX;
-    let dy = touch.clientY - centerY;
-    let dist = Math.sqrt(dx*dx + dy*dy);
-    if (dist > maxDist) {
-      dx = dx * maxDist / dist;
-      dy = dy * maxDist / dist;
+    let dx = t.clientX - centerX;
+    let dy = t.clientY - centerY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    let clampDx = dx, clampDy = dy;
+    if (dist > MAX_DIST) {
+      clampDx = dx * MAX_DIST / dist;
+      clampDy = dy * MAX_DIST / dist;
     }
-    joystickX = dx / maxDist;
-    joystickY = dy / maxDist;
-    joystickStick.style.left = (baseRect.width/2 - joystickStick.offsetWidth/2 + dx) + 'px';
-    joystickStick.style.top = (baseRect.height/2 - joystickStick.offsetHeight/2 + dy) + 'px';
+    // Use transform for GPU-accel
+    joystickStick.style.transform = `translate(${clampDx}px, ${clampDy}px)`;
+    joystickX = clamp(clampDx / MAX_DIST, -1, 1);
+    joystickY = clamp(clampDy / MAX_DIST, -1, 1);
   }, { passive: false });
 
-  // treat touching the base as equivalent to touching the stick
-  joystickBase.addEventListener('touchstart', function(e) {
-    e.preventDefault();
-    joystickActive = true;
-    refreshBaseRect();
-  }, { passive: false });
-
-  // handle canceled touches
-  window.addEventListener('touchcancel', function(e) {
+  // touchend / cancel -> animate knob back to center and restore base
+  function onTouchEnd() {
+    if (!joystickActive) return;
     joystickActive = false;
     joystickX = 0; joystickY = 0;
-    if (baseRect && joystickStick) {
-      joystickStick.style.left = (baseRect.width/2 - joystickStick.offsetWidth/2) + 'px';
-      joystickStick.style.top = (baseRect.height/2 - joystickStick.offsetHeight/2) + 'px';
-    }
-  }, { passive: true });
-}
+    // knob animate back
+    joystickStick.style.transition = 'transform 180ms ease';
+    joystickStick.style.transform = 'translate(0px, 0px)';
+    // restore base anchored position
+    restoreBaseAnchored();
+  }
+  window.addEventListener('touchend', onTouchEnd, { passive: true });
+  window.addEventListener('touchcancel', onTouchEnd, { passive: true });
+})();
 
 
    
