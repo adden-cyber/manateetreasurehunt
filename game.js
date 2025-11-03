@@ -2653,7 +2653,8 @@ if (loginBtn) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
-        timeoutMs: 7000
+        timeoutMs: 7000,
+        credentials: 'include' // <- ensure browser accepts backend Set-Cookie on cross-origin
       });
       const data = await safeParseJson(res) || {};
       if (data.ok) {
