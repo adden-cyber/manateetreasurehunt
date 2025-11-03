@@ -46,28 +46,23 @@ function formatTimeRemainingTo(nextUtcDate) {
 
 // Update Start button disabled state and (optionally) its label.
 // If you call updateStartButtonUI() before startButton exists, it will try the cached var when available.
+// Replace updateStartButtonUI(...) with this version
 function updateStartButtonUI(customLabel) {
   const sb = startButton || document.getElementById('start-button');
   if (!sb) return;
   const cost = DIFFICULTY_CREDIT_COST[selectedDifficulty] || 10;
 
   // Disable reasons: request in flight, not logged in, or not enough credits
-  const notLoggedIn = !userToken;
+  const notLoggedIn = !isAuthenticated;
   const noCredits = (typeof userCredits === 'number' ? (userCredits < cost) : false);
   const disabled = !!startRequestInFlight || notLoggedIn || noCredits;
 
-  // Native disabled state
   sb.disabled = disabled;
 
-  // IMPORTANT: also manage pointer-events so an inline "pointer-events: none" left behind
-  // by other code cannot make the button visually enabled but unclickable.
   try {
     sb.style.pointerEvents = disabled ? 'none' : 'auto';
-  } catch (e) {
-    // ignore styling failures
-  }
+  } catch (e) {}
 
-  // Helpful tooltip so users know *why* the button is disabled
   if (startRequestInFlight) {
     sb.title = 'Starting — please wait';
   } else if (notLoggedIn) {
@@ -88,7 +83,7 @@ function updateStartButtonUI(customLabel) {
 function refreshFeedbackButton() {
   const sendBtn = document.getElementById('send-feedback-btn');
   if (!sendBtn) return;
-  if (!userToken) {
+  if (!isAuthenticated) {
     sendBtn.disabled = true;
     sendBtn.title = 'Log in to send feedback';
   } else {
@@ -369,7 +364,8 @@ async function processFailedLogs() {
         const res = await fetchWithTimeout(entry.url, {
           method: entry.method || 'POST',
           headers: createHeaders({ 'Content-Type': 'application/json' }),
-          body: entry.body ? JSON.stringify(entry.body) : undefined
+          body: entry.body ? JSON.stringify(entry.body) : undefined,
+          credentials: 'include'
         }, 4000);
 
         // Treat success OR "not found" for gameplay-endpoints as non-retryable
@@ -390,6 +386,11 @@ async function processFailedLogs() {
     console.warn('[telemetry] processFailedLogs failed', e);
   }
 }
+let failedLogsIntervalId = null;
+
+try { processFailedLogs().catch(console.warn); } catch (e) {}
+failedLogsIntervalId = setInterval(() => processFailedLogs().catch(console.warn), 30000);
+
 
 /* attachIfExists: convenience to addEventListener only if element exists */
 function attachIfExists(selectorOrEl, evt, handler, options) {
@@ -403,35 +404,27 @@ function attachIfExists(selectorOrEl, evt, handler, options) {
   }
 }
 
-// try immediately and schedule periodic retries
-try { processFailedLogs().catch(console.warn); } catch (e) {}
-setInterval(() => processFailedLogs().catch(console.warn), 30000);
+
 
 // Add this helper (place right after fetchWithTimeout or before wireFeedbackUI)
 async function sendFeedbackToServer(payload) {
   const url = `${backendBase()}/api/feedback`;
-  const headers = { 'Content-Type': 'application/json' };
-  if (userToken) headers['Authorization'] = `Bearer ${userToken}`;
-
-  console.debug('[feedback] sending', { email: userEmail, rating: payload.rating, textLen: (payload.text||'').length, hasToken: !!userToken });
-
+  // Use authFetch so cookies (httpOnly) are included
   try {
-    const res = await fetchWithTimeout(url, {
+    const res = await authFetch(url, {
       method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    }, 7000);
-
-    // Helpful diagnostics in console to see server response and status
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      timeoutMs: 7000
+    });
     let bodyText = '<no body>';
     try { bodyText = await res.clone().text(); } catch (e) {}
-    console.debug('[feedback] response', { ok: !!res && res.ok, status: res && res.status, bodyPreview: bodyText.slice(0, 1000) });
+    console.debug('[feedback] response', { ok: !!res && res.ok, status: res && res.status, bodyPreview: bodyText.slice(0,1000) });
 
     if (!res.ok) {
-  const errJson = await safeParseJson(res) || {};
-  throw new Error('Feedback failed: ' + (errJson.error || res.status));
-}
-
+      const errJson = await safeParseJson(res) || {};
+      throw new Error('Feedback failed: ' + (errJson.error || res.status));
+    }
     return res;
   } catch (err) {
     console.warn('[feedback] sendFeedbackToServer failed', err);
@@ -440,11 +433,19 @@ async function sendFeedbackToServer(payload) {
 }
 
 
-// Utility: create headers object and include Authorization only when userToken exists
+let isAuthenticated = false;
+
+// set authentication state helper (keeps UI in sync)
+function setAuthenticated(auth) {
+  isAuthenticated = !!auth;
+  // Refresh UI that depends on auth
+  try { updateStartButtonUI(); } catch (e) {}
+  try { refreshFeedbackButton(); } catch (e) {}
+}
+
+// createHeaders: pure merge of caller headers. Cookie auth is used via credentials:'include' in fetch.
 function createHeaders(base = {}) {
-  const headers = Object.assign({}, base);
-  if (userToken) headers['Authorization'] = `Bearer ${userToken}`;
-  return headers;
+  return Object.assign({}, base || {});
 }
 
 // Compute backend base URL (strip trailing /api if present)
@@ -489,54 +490,48 @@ function applyConfigToGlobals(cfg) {
 }
 
 let sessionId = null;
-let userToken = localStorage.getItem('token') || null;
+let userToken = null; // token not used in cookie-first mode
 let userEmail = localStorage.getItem('email') || null;
 let customPattern = [], TOTAL_TREASURES = 0, SEAWEED_COUNT = 0, BUBBLE_COUNT = 0, NUM_MINES = 0, GAME_TIME_SECONDS = 0;
-/* 5) Make start logging non-blocking: never block init on network */
-// REPLACE the existing logStartGame() with this safer dry-run-only version
- // REPLACE existing logStartGame() with this
-function logStartGame() {
-  // never call /start for real here. This is a best-effort dry-run for diagnostics only.
+
+// Replace existing logStartGame()
+async function logStartGame() {
+  // non-blocking dry-run; do not set sessionId here
   if (sessionId) return Promise.resolve();
 
-  const headers = { 'Content-Type': 'application/json', 'X-Dry-Run': '1' };
-  if (userToken) headers['Authorization'] = `Bearer ${userToken}`;
-
-  return fetchWithTimeout(`${backendBase()}/api/start`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ difficulty: selectedDifficulty, email: userEmail })
-  }, 5000)
-  .then(r => {
-    if (!r.ok) return Promise.reject(new Error(`start dry-run ${r.status}`));
-    return safeParseJson(r);
-  })
-  .then(data => {
-    // don't mutate sessionId here — this must only be set by the real /start response
-    return data;
-  })
-  .catch(err => {
+  try {
+    const res = await authFetch(`${backendBase()}/api/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Dry-Run': '1' },
+      body: JSON.stringify({ difficulty: selectedDifficulty, email: userEmail }),
+      timeoutMs: 5000
+    });
+    if (!res || !res.ok) {
+      // non-blocking: don't fail init because of this
+      throw new Error(`start dry-run ${res && res.status}`);
+    }
+    return await safeParseJson(res);
+  } catch (err) {
     console.warn('[game] logStartGame failed (non-blocking):', err);
     return null;
-  });
+  }
 }
 
 /* Telemetry: send events with timeout and enqueue failed attempts for retry */
 function logChest(chest) {
   const url = `${backendBase()}/api/chest`;
   const payload = { sessionId, x: chest.x, y: chest.y, value: chest.value, type: chest.type };
-  fetchWithTimeout(url, {
+  authFetch(url, {
     method: "POST",
-    headers: createHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(payload)
-  }, 4000)
-  .then(res => {
-    if (!res.ok) {
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    timeoutMs: 4000
+  }).then(res => {
+    if (!res || !res.ok) {
       enqueueFailedLog({ url, method: 'POST', body: payload });
-      console.warn('[logChest] non-ok, queued for retry', res.status);
+      console.warn('[logChest] non-ok, queued for retry', res && res.status);
     }
-  })
-  .catch(err => {
+  }).catch(err => {
     console.warn('[logChest] failed, queued for retry', err);
     enqueueFailedLog({ url, method: 'POST', body: payload });
   });
@@ -545,7 +540,7 @@ function logChest(chest) {
 function logBubble(bubble) {
   const url = `${backendBase()}/api/bubble`;
   const payload = { sessionId, x: bubble.x, y: bubble.y, value: bubble.value };
-  fetchWithTimeout(url, {
+  authFetch(url, {
     method: "POST",
     headers: createHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(payload)
@@ -565,7 +560,7 @@ function logBubble(bubble) {
 function logMineDeath() {
   const url = `${backendBase()}/api/mineDeath`;
   const payload = { sessionId };
-  fetchWithTimeout(url, {
+  authFetch(url, {
     method: "POST",
     headers: createHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(payload)
@@ -592,7 +587,7 @@ function logEndGame(endedEarly = false) {
     score: typeof score !== 'undefined' ? score : 0,
     seaweedsCollected: Array.isArray(collectibleSeaweeds) ? collectibleSeaweeds.filter(s => s.collected).length : 0
   };
-  fetchWithTimeout(url, {
+  authFetch(url, {
     method: "POST",
     headers: createHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(payload)
@@ -1598,7 +1593,41 @@ function preloadImages(manifest, onComplete) {
 }
 
 document.addEventListener('DOMContentLoaded',async () => {
-  
+
+  async function refreshAuth() {
+    try {
+      // call a lightweight server endpoint that returns { ok, email, credits } when cookie is valid
+      const res = await authFetch(`${backendBase()}/api/me`, { timeoutMs: 5000, credentials: 'include' });
+      if (!res || !res.ok) {
+        // not authenticated
+        userEmail = null;
+        userToken = null;
+        setAuthenticated(false);
+        setCredits(null);
+        return false;
+      }
+      const data = await safeParseJson(res) || {};
+      userEmail = data.email || userEmail;
+      userToken = null; // cookie-first: do not set a token
+      if (typeof data.credits !== 'undefined') setCredits(data.credits);
+      setAuthenticated(true);
+      showWelcomeEmail();
+      return true;
+    } catch (err) {
+      console.warn('[refreshAuth] failed', err);
+      userToken = null;
+      setAuthenticated(false);
+      return false;
+    }
+  }
+  // refreshAuth() is defined above in this DOMContentLoaded scope
+try {
+  const authOk = await refreshAuth();
+  console.debug('[init] refreshAuth result:', authOk);
+} catch (e) {
+  console.warn('[init] refreshAuth threw', e);
+}
+
   // Robust client-side error reporting (non-blocking)
 window.addEventListener('error', (ev) => {
   try {
@@ -1634,12 +1663,9 @@ window.addEventListener('unhandledrejection', (ev) => {
 
 async function loadStartLeaderboard() {
   try {
-    if (!userToken) {
-      console.warn("loadStartLeaderboard: no userToken; skipping fetch");
-      return;
-    }
+    // Do not require local userToken; authFetch will send cookies if present.
     const url = `${backendBase()}/api/leaderboard`;
-    const res = await authFetch(url, { credentials: 'include', timeoutMs: 7000 });
+    const res = await authFetch(url, { timeoutMs: 7000 });
     if (!res.ok) {
       const text = await (res.text().catch(() => "<no body>"));
       console.error("loadStartLeaderboard: failed", res.status, res.statusText, text);
@@ -1658,7 +1684,7 @@ async function loadStartLeaderboard() {
 }
 
 async function loadUserSessions() {
-  if (!userToken) {
+  if (!isAuthenticated) {
     renderUserSessions([]); // show logged-out message / clear
     return;
   }
@@ -1682,7 +1708,7 @@ async function loadUserSessions() {
 }
 
 if (document.getElementById('user-sessions-container')) {
-    document.getElementById('user-sessions-container').style.display = userToken ? '' : 'none';
+    document.getElementById('user-sessions-container').style.display = isAuthenticated ? '' : 'none';
   }
 
  // --- Welcome text and difficulty-cost hover/click UI ---
@@ -1775,11 +1801,11 @@ function renderUserSessions(sessions) {
   const mobileList = document.getElementById('mobile-history-list');
 
   // Ensure panel visibility only when logged in
-  if (panel) panel.style.display = userToken ? 'block' : 'none';
+  if (panel) panel.style.display = isAuthenticated ? 'block' : 'none';
   if (!container) return;
 
   // If not logged in or no sessions, show empty state (mobile & desktop)
-  if (!userToken || !sessions || sessions.length === 0) {
+  if (!isAuthenticated || !sessions || sessions.length === 0) {
     container.innerHTML = `<div style="color:#9fb7c6;padding:8px;">No sessions yet.</div>`;
     if (mobileList) mobileList.innerHTML = `<div style="color:#222; padding:8px;">No sessions yet.</div>`;
     return;
@@ -2147,7 +2173,7 @@ if (typeof showWelcomeEmail === 'function') showWelcomeEmail();
 
 // If there's a token we assume the user is logged in — show the start screen and refresh panels.
 // Otherwise show the auth screen.
-if (userToken) {
+if (isAuthenticated) {
   if (typeof loadStartLeaderboard === 'function') loadStartLeaderboard();
   if (typeof loadUserSessions === 'function') loadUserSessions();
   if (startScreen) {
@@ -2231,7 +2257,7 @@ if (userToken) {
       const text = (feedbackText && feedbackText.value || '').trim();
   
       // Require login for feedback (server requires auth)
-      if (!userToken) {
+      if (!isAuthenticated) {
         alert('Please log in to send feedback.');
         // show login screen so they can log in quickly
         showScreen(document.getElementById('auth-screen'));
@@ -2656,68 +2682,70 @@ function showScreen(target) {
 
 
   const loginBtn = document.getElementById('login-btn');
-if (loginBtn) {
-  loginBtn.onclick = async () => {
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-    try {
-      const res = await authFetch(`${backendBase()}/api/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-        timeoutMs: 7000,
-        credentials: 'include' // <- ensure browser accepts backend Set-Cookie on cross-origin
-      });
-      const data = await safeParseJson(res) || {};
-      if (data.ok) {
-        userToken = data.token;
-        userEmail = data.email;
-        try {
-          localStorage.setItem('token', data.token);
-          localStorage.setItem('email', data.email || '');
-          localStorage.setItem('credits', String(data.credits || 0));
-          if (typeof data.id !== 'undefined') localStorage.setItem('adminId', String(data.id));
-          if (typeof data.isAdmin !== 'undefined') localStorage.setItem('isAdmin', data.isAdmin ? '1' : '0');
-        } catch (e) {
-          console.warn('Failed to set localStorage during login:', e);
-        }
-        if (typeof data.credits !== "undefined") setCredits(data.credits);
-        updateStartButtonUI();
-        refreshFeedbackButton();
-        showScreen(startScreen);
-        loadStartLeaderboard();
-        await loadUserSessions();
-        showWelcomeEmail();
+  if (loginBtn) {
+    loginBtn.onclick = async () => {
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+      try {
+        const res = await authFetch(`${backendBase()}/api/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+          timeoutMs: 7000,
+          credentials: 'include' // ensure cookie accepted on cross-origin
+        });
+        const data = await safeParseJson(res) || {};
+        if (data.ok) {
+          // COOKIE-FIRST: server sets httpOnly cookie — don't persist JWT in localStorage.
+          // Keep userEmail in localStorage for convenience, but avoid storing secrets.
+          userToken = null; // clear any token stored previously
+          userEmail = data.email || email || null;
 
-        // Fetch game config best-effort
-        try {
-          const cfgRes = await authFetch(`${backendBase()}/api/game-config?difficulty=${encodeURIComponent(selectedDifficulty)}`, { headers: { "Accept": "application/json" }, timeoutMs: 7000 });
-          if (cfgRes && cfgRes.ok) {
-            GAME_CONFIG = await safeParseJson(cfgRes) || { ...DEFAULT_GAME_CONFIG };
-          } else {
+          setAuthenticated(true);
+
+          try {
+          localStorage.setItem('email', userEmail || '');
+          if (typeof data.credits !== "undefined") localStorage.setItem('credits', String(data.credits));
+          } catch (e) {
+          console.warn('Failed to set localStorage during login:', e);
+          }
+          if (typeof data.credits !== "undefined") setCredits(data.credits);
+          updateStartButtonUI();
+          refreshFeedbackButton();
+          showScreen(startScreen);
+          loadStartLeaderboard();
+          await loadUserSessions();
+          showWelcomeEmail();
+  
+          // Fetch game config best-effort (same as before)
+          try {
+            const cfgRes = await authFetch(`${backendBase()}/api/game-config?difficulty=${encodeURIComponent(selectedDifficulty)}`, { headers: { "Accept": "application/json" }, timeoutMs: 7000 });
+            if (cfgRes && cfgRes.ok) {
+              GAME_CONFIG = await safeParseJson(cfgRes) || { ...DEFAULT_GAME_CONFIG };
+            } else {
+              GAME_CONFIG = { ...DEFAULT_GAME_CONFIG };
+            }
+          } catch (err) {
+            console.warn('fetch game config failed, using defaults', err);
             GAME_CONFIG = { ...DEFAULT_GAME_CONFIG };
           }
-        } catch (err) {
-          console.warn('fetch game config failed, using defaults', err);
-          GAME_CONFIG = { ...DEFAULT_GAME_CONFIG };
+  
+          customPattern = GAME_CONFIG.mazePattern;
+          TOTAL_TREASURES = GAME_CONFIG.totalTreasures;
+          SEAWEED_COUNT = GAME_CONFIG.totalSeaweeds;
+          BUBBLE_COUNT = GAME_CONFIG.totalBubbles;
+          NUM_MINES = GAME_CONFIG.totalMines;
+          GAME_TIME_SECONDS = GAME_CONFIG.gameTimeSeconds;
+        } else {
+          const authErr = document.getElementById('auth-error');
+          if (authErr) authErr.textContent = data.error || 'Login error';
         }
-
-        customPattern = GAME_CONFIG.mazePattern;
-        TOTAL_TREASURES = GAME_CONFIG.totalTreasures;
-        SEAWEED_COUNT = GAME_CONFIG.totalSeaweeds;
-        BUBBLE_COUNT = GAME_CONFIG.totalBubbles;
-        NUM_MINES = GAME_CONFIG.totalMines;
-        GAME_TIME_SECONDS = GAME_CONFIG.gameTimeSeconds;
-      } else {
+      } catch (e) {
         const authErr = document.getElementById('auth-error');
-        if (authErr) authErr.textContent = data.error || 'Login error';
+        if (authErr) authErr.textContent = 'Login error';
       }
-    } catch (e) {
-      const authErr = document.getElementById('auth-error');
-      if (authErr) authErr.textContent = 'Login error';
-    }
-  };
-}
+    };
+  }
   const feedbackReturnBtn = document.getElementById('feedback-return-btn');
 if (feedbackReturnBtn) {
   feedbackReturnBtn.type = 'button'; // safe for forms
@@ -2737,10 +2765,17 @@ const logoutBtn = document.getElementById('logout-btn');
 const startLogoutBtn = document.getElementById('start-logout-btn');
 
 function doLogout() {
+  // Optionally notify server to clear cookie: best-effort
+  try { authFetch(`${backendBase()}/api/logout`, { method: 'POST', timeoutMs: 3000 }).catch(()=>{}); } catch(e){}
+
   // Clear in-memory
   userToken = null;
   userEmail = null;
   sessionId = null;
+
+  // Mark client as logged out
+  setAuthenticated(false);
+
   // Clear persisted auth and credits
   try {
     localStorage.removeItem('token');
@@ -2751,20 +2786,25 @@ function doLogout() {
   } catch (e) {
     console.warn('Failed to clear localStorage on logout', e);
   }
-  // Reset UI state
+
+  // Reset UI state...
   setCredits(null);
   renderUserSessions([]);
-  showWelcomeEmail(); // hides welcome if no email
+  showWelcomeEmail();
   updateStartButtonUI();
   refreshFeedbackButton();
-  // Show auth screen
   showScreen(document.getElementById('auth-screen'));
+
   try {
     if (preGameInterval) { clearInterval(preGameInterval); preGameInterval = null; }
     if (timeInterval) { clearInterval(timeInterval); timeInterval = null; }
     if (creditsCountdownInterval) { clearInterval(creditsCountdownInterval); creditsCountdownInterval = null; }
     if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
   } catch (e) { /* ignore */ }
+
+  try {
+    if (failedLogsIntervalId) { clearInterval(failedLogsIntervalId); failedLogsIntervalId = null; }
+  } catch(e) {}
 }
 
 // Attach the same implementation to both possible logout buttons (auth and start screens)
@@ -2893,7 +2933,7 @@ function waitForGameActive(timeoutMs = 12000) {
 async function handleStartButtonClick() {
   console.debug('[handleStartButtonClick] called', {
     selectedDifficulty,
-    userTokenExists: !!userToken,
+    isAuthenticated: !!isAuthenticated,
     userEmail,
     userCredits,
     startRequestInFlight
@@ -2914,7 +2954,7 @@ async function handleStartButtonClick() {
   console.info('[start] startRequestInFlight set -> starting flow', {
     difficulty: selectedDifficulty,
     userEmail,
-    hasToken: !!userToken,
+    isAuthenticated: !!isAuthenticated,
     userCredits
   });
 
@@ -2932,13 +2972,13 @@ async function handleStartButtonClick() {
     // 1) Dry-run: check server-side if we can start (no side-effects)
 console.debug('[start] sending dry-run /start (X-Dry-Run=1)');
 const dryHeaders = { 'Content-Type': 'application/json', 'X-Dry-Run': '1' };
-if (userToken) dryHeaders['Authorization'] = `Bearer ${userToken}`;
 
-const dryRes = await fetchWithTimeout(`${backendBase()}/api/start`, {
+const dryRes = await authFetch(`${backendBase()}/api/start`, {
   method: 'POST',
-  headers: dryHeaders,
-  body: JSON.stringify({ difficulty: selectedDifficulty, email: userEmail })
-}, 5000);
+  headers: { 'Content-Type': 'application/json', 'X-Dry-Run': '1' },
+  body: JSON.stringify({ difficulty: selectedDifficulty, email: userEmail }),
+  timeoutMs: 5000
+});
 
 console.debug('[start] dry-run response', { ok: !!dryRes && dryRes.ok, status: dryRes && dryRes.status });
 
@@ -3024,11 +3064,12 @@ const idempotencyKey = (window.__lastStartAttempt && window.__lastStartAttempt.i
 
 console.info('[start] performing real POST /start', { idempotencyKey, headersPreview: Object.keys(realHeaders), difficulty: selectedDifficulty });
 
-const res = await fetchWithTimeout(`${backendBase()}/api/start`, {
+const res = await authFetch(`${backendBase()}/api/start`, {
   method: 'POST',
-  headers: realHeaders,
-  body: JSON.stringify({ difficulty: selectedDifficulty, email: userEmail, idempotencyKey })
-}, 7000);
+  headers: createHeaders({ 'Content-Type': 'application/json' }),
+  body: JSON.stringify({ difficulty: selectedDifficulty, email: userEmail, idempotencyKey }),
+  timeoutMs: 7000
+});
 
 console.debug('[start] real /start response', { ok: !!res && res.ok, status: res && res.status });
 
