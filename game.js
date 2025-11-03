@@ -323,10 +323,22 @@ async function authFetch(url, options = {}) {
   const opts = Object.assign({}, options);
   const timeoutMs = (typeof opts.timeoutMs === 'number') ? opts.timeoutMs : 7000;
   delete opts.timeoutMs;
-  opts.headers = createHeaders(opts.headers || {});
+
+  // Merge and normalize headers (do not mutate caller header object)
+  const callerHeaders = opts.headers || {};
+  // createHeaders will add Authorization only when userToken exists
+  opts.headers = createHeaders(Object.assign({}, callerHeaders));
+
+  // Ensure cookies are sent so server-set httpOnly token cookie works.
+  // If caller explicitly set credentials, respect that; otherwise default to 'include'.
+  if (typeof opts.credentials === 'undefined') {
+    opts.credentials = 'include';
+  }
+
   try {
     return await fetchWithTimeout(url, opts, timeoutMs);
   } catch (err) {
+    // Re-throw to let callers handle network/timeouts
     throw err;
   }
 }
