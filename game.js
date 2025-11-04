@@ -4229,5 +4229,14 @@ if (!gameActive && (preGameCountdown > 0 || preGameState === "start")) {
   }
 
   // ----------- END FIXED render() function -----------
+
+  function updateHudToggleVis() {
+    const shouldShowToggle = !!window.gameActive && preGameState === "running";
+    document.querySelectorAll('#game-screen #toggle-hud-button').forEach(btn => {
+      btn.style.setProperty('display', shouldShowToggle ? 'block' : 'none', 'important');
+      btn.style.setProperty('pointer-events', shouldShowToggle ? 'auto' : 'none', 'important');
+    });
+  }
+  
   });
 });
