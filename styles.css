@@ -1703,4 +1703,42 @@ button:hover, .difficulty-btn:hover {
       box-sizing: border-box;
     }
   }
+
+  /* --- Extend HUD pill width and improve content spacing for mobile --- */
+@media (max-width: 700px) {
+  #game-screen .game-info {
+    min-width: 340px !important;         /* Wider pill: fits all stats/buttons */
+    max-width: 96vw !important;          /* Use almost screen width */
+    font-size: 0.90rem !important;       /* Slightly larger font for readability */
+    gap: 10px !important;                /* More gap between items */
+    padding: 6px 14px !important;        /* More left/right padding */
+    left: 50% !important;
+    top: 56px !important;                /* Slightly lower to not overlap the minimap/toggle */
+    transform: translateX(-50%) !important;
+    box-sizing: border-box !important;
+  }
+
+  #game-screen .game-info .score,
+  #game-screen .game-info .treasures,
+  #game-screen .game-info .timer {
+    min-width: 74px !important;          /* Each item gets more room */
+    padding: 5px 8px !important;
+    font-size: 1em !important;
+    letter-spacing: 0.02em !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  #game-screen .game-info #end-game-button {
+    min-width: 77px !important;
+    font-size: 0.98em !important;
+    padding: 5px 14px !important;
+    white-space: nowrap !important;
+    display: inline-block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    margin-left: 5px !important;
+  }
+}
 /* End of file */
