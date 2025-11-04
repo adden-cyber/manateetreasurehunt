@@ -1778,4 +1778,29 @@ button:hover, .difficulty-btn:hover {
     z-index: 12500 !important;
   }
 }
+
+@media (max-width: 700px) {
+  /* Make HUD pill contents smaller and less wide-spaced; pill remains same size */
+  #game-screen .game-info {
+    gap: 4px !important;               /* LESS horizontal gap between items */
+    padding: 3px 6px !important;       /* Slightly less inside padding */
+    font-size: 0.70rem !important;     /* Smaller base font inside pill */
+    min-width: 180px !important;       /* Allow pill to shrink (if you want even smaller, reduce further) */
+    max-width: 92vw !important;        /* Don't let HUD stretch too wide */
+  }
+  /* Individual item tweaks */
+  #game-screen .game-info .score,
+  #game-screen .game-info .treasures,
+  #game-screen .game-info .timer {
+    font-size: 0.77em !important;      /* Even smaller labels/numbers */
+    min-width: 58px !important;        /* Keep enough room for numbers, but compact */
+    padding: 2px 4px !important;       /* Less left/right space */
+  }
+  #game-screen .game-info #end-game-button {
+    font-size: 0.77em !important;
+    min-width: 52px !important;
+    padding: 3px 8px !important;
+    margin-left: 4px !important;       /* Tighten space before button */
+  }
+}
 /* End of file */
