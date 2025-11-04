@@ -1741,4 +1741,23 @@ button:hover, .difficulty-btn:hover {
     margin-left: 5px !important;
   }
 }
+
+@media (max-width: 700px) {
+  #game-screen .game-info {
+    gap: 2px !important;             /* Much tighter gap between HUD items */
+    padding: 6px 12px !important;    /* (Optionally) a little less pill padding */
+  }
+
+  #game-screen .game-info .score,
+  #game-screen .game-info .treasures,
+  #game-screen .game-info .timer {
+    margin-right: 0 !important;      /* Remove any default margin if inherited */
+    /* Optional: you may add a tiny margin if you want a hint of separation:
+       margin-right: 2px !important;
+    */
+  }
+  #game-screen .game-info #end-game-button {
+    margin-left: 3px !important;     /* A little margin before button  */
+  }
+}
 /* End of file */
