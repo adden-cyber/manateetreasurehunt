@@ -1731,4 +1731,51 @@ button:hover, .difficulty-btn:hover {
     z-index: 12500 !important;
   }
 }
+
+/* ---- PATCH: HUD should be WIDER and not move up!! ---- */
+@media (max-width: 700px) {
+  #game-screen .game-info {
+    /* Make sure the HUD pill is wide enough for all text + button */
+    min-width: 320px !important;      /* Set a reasonable minimum width */
+    max-width: 96vw !important;       /* Don't exceed the screen width */
+    left: 50% !important;
+    top: 14px !important;             /* Do NOT push HUD higher, keep it near the top */
+    transform: translateX(-50%) !important;
+    gap: 12px !important;             /* More gap between items */
+    justify-content: center !important;
+    flex-wrap: nowrap !important;
+    font-size: 0.88rem !important;
+    padding: 6px 10px !important;
+    box-sizing: border-box !important;
+  }
+  /* --- Score/Treasures/Timer: each wider --- */
+  #game-screen .game-info .score,
+  #game-screen .game-info .treasures,
+  #game-screen .game-info .timer {
+    min-width: 80px !important;
+    padding: 6px 10px !important;
+    font-size: 1.01em !important;
+    letter-spacing: 0.03em !important;
+    white-space: nowrap !important;
+  }
+  /* End Game Button: visible and not hidden! */
+  #game-screen .game-info #end-game-button {
+    min-width: 72px !important;
+    font-size: 0.97em !important;
+    padding: 6px 18px !important;
+    white-space: nowrap !important;
+    display: inline-block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+}
+
+/* ---- PATCH: Lower the minimap, but only a little ---- */
+@media (max-width: 700px) {
+  .minimap-frame {
+    top: 54px !important;      /* Lower, but NOT so much it collides with joystick/HUD. If you want even more space, use 64px or 74px, but 54px matches the HUD */
+    left: 10px !important;
+    z-index: 12500 !important;
+  }
+}
 /* End of file */
