@@ -2403,11 +2403,7 @@ if (registerSuccessPopup) {
   };
 }
 
-// REPLACE the setHUDVisible(...) function with this corrected version.
-// - ensures toggle stays above the HUD (toggle z-index > hud z-index)
-// - repositions HUD under the toggle on mobile
-// - exposes a small helper to reflow HUD on resize/orientation
-
+// REPLACE the existing setHUDVisible(...) function with this corrected version.
 function setHUDVisible(visible) {
   const hudEls = document.querySelectorAll('#game-screen .game-info');
 
@@ -2415,12 +2411,8 @@ function setHUDVisible(visible) {
     try {
       // Keep fixed top-center positioning
       el.style.setProperty('position', 'fixed', 'important');
-      el.style.setProperty('top', '12px', 'important');
       el.style.setProperty('left', '50%', 'important');
       el.style.setProperty('transform', 'translateX(-50%)', 'important');
-      el.style.setProperty('z-index', '12999', 'important'); // NOTE: lower than toggle by default
-
-      // Use inline-flex and prevent wrapping
       el.style.setProperty('display', 'inline-flex', 'important');
       el.style.setProperty('flex-wrap', 'nowrap', 'important');
       el.style.setProperty('white-space', 'nowrap', 'important');
@@ -2430,6 +2422,11 @@ function setHUDVisible(visible) {
       el.style.setProperty('padding', '6px 10px', 'important');
       el.style.setProperty('font-size', '1.0em', 'important');
       el.style.setProperty('align-items', 'center', 'important');
+
+      // ensure a conservative top so it's not too close to the very top initially
+      // The mobile-specific reposition will run below if needed
+      el.style.setProperty('top', '20px', 'important');
+      el.style.setProperty('z-index', '12999', 'important');
     } catch (e) {
       // ignore style application failures on some browsers
     }
@@ -2448,61 +2445,72 @@ function setHUDVisible(visible) {
 
   hudVisible = !!visible;
 
-  // Mobile-specific shrink and placement under the toggle
-  if (typeof isMobile !== 'undefined' && isMobile) {
-    const hud = document.querySelector('#game-screen .game-info');
-    const toggle = document.getElementById('toggle-hud-button');
-
-    document.querySelectorAll('#game-screen .game-info').forEach(el => {
-      try {
-        el.style.setProperty('gap', '6px', 'important');
-        el.style.setProperty('padding', '4px 8px', 'important');
-        el.style.setProperty('font-size', '0.85em', 'important');
-        el.style.setProperty('max-width', 'calc(100% - 120px)', 'important'); // leave room for toggle
-      } catch (e) {}
-    });
-
-    // Shrink individual HUD item spacing
-    document.querySelectorAll('#game-screen .game-info .score, #game-screen .game-info .treasures, #game-screen .game-info .timer').forEach(item => {
-      try {
-        item.style.setProperty('padding', '4px 6px', 'important');
-        item.style.setProperty('font-size', '0.9em', 'important');
-      } catch (e) {}
-    });
-
-    // Place the HUD pill below the toggle button on mobile so it doesn't get covered.
+  // Ensure HUD content (score/treasures/time) is current whenever we show the HUD
+  if (hudVisible) {
     try {
-      if (toggle && hud) {
-        const tRect = toggle.getBoundingClientRect();
-        const desiredTop = Math.round(tRect.bottom + 6); // 6px gap under toggle
-        hud.style.setProperty('top', `${desiredTop}px`, 'important');
-        hud.style.setProperty('left', '50%', 'important');
-        hud.style.setProperty('transform', 'translateX(-50%)', 'important');
+      // Keep numeric UI in sync immediately
+      if (typeof updateScoreDisplay === 'function') updateScoreDisplay();
+      if (typeof updateTimerDisplay === 'function') updateTimerDisplay();
+    } catch (e) { /* ignore */ }
+  }
 
-        // Ensure toggle is above HUD (toggle should be on top)
+  // Mobile-specific shrink and placement under the toggle (or safe fallback)
+  try {
+    const toggle = document.getElementById('toggle-hud-button');
+    const hud = document.querySelector('#game-screen .game-info');
+    // If mobile or toggle exists and is visible, place HUD pill under the toggle to avoid overlap.
+    if ((typeof isMobile !== 'undefined' && isMobile) || (toggle && window.getComputedStyle(toggle).display !== 'none')) {
+      document.querySelectorAll('#game-screen .game-info').forEach(el => {
         try {
-          toggle.style.setProperty('z-index', '13001', 'important'); // toggle above hud
-          hud.style.setProperty('z-index', '12999', 'important');   // hud below toggle
+          el.style.setProperty('gap', '6px', 'important');
+          el.style.setProperty('padding', '4px 8px', 'important');
+          el.style.setProperty('font-size', '0.85em', 'important');
+          el.style.setProperty('max-width', 'calc(100% - 120px)', 'important'); // leave room for toggle
         } catch (e) {}
+      });
 
-        // If HUD extends beyond viewport bottom, reduce padding/font minimally to fit
-        const hudRect = hud.getBoundingClientRect();
-        const overflow = hudRect.bottom - window.innerHeight;
-        if (overflow > 0) {
-          hud.style.setProperty('padding', '3px 6px', 'important');
-          hud.style.setProperty('font-size', '0.72rem', 'important');
+      // If we have the toggle's position, place HUD just below its bottom edge
+      try {
+        if (toggle && hud && hudVisible) {
+          const tRect = toggle.getBoundingClientRect();
+          // If toggle is offscreen/hidden, fall back to reasonable top
+          let desiredTop =  Math.round((tRect && tRect.bottom) ? (tRect.bottom + 6) : 56);
+          // Prevent HUD from being pushed off the bottom
+          const maxTop = Math.max(18, window.innerHeight - 72);
+          if (desiredTop > maxTop) desiredTop = maxTop;
+          hud.style.setProperty('top', `${desiredTop}px`, 'important');
+          hud.style.setProperty('left', '50%', 'important');
+          hud.style.setProperty('transform', 'translateX(-50%)', 'important');
+
+          // Ensure toggle above hud
+          try {
+            toggle.style.setProperty('z-index', '13001', 'important');
+            hud.style.setProperty('z-index', '12999', 'important');
+          } catch (e) {}
+        } else {
+          // fallback top for mobile if no toggle measurement available
+          document.querySelectorAll('#game-screen .game-info').forEach(el => {
+            try { el.style.setProperty('top', '56px', 'important'); } catch (e) {}
+          });
         }
+      } catch (e) {
+        console.warn('[setHUDVisible] mobile placement failed', e);
       }
-    } catch (e) {
-      console.warn('[setHUDVisible] mobile placement failed', e);
+    } else {
+      // Desktop default top
+      document.querySelectorAll('#game-screen .game-info').forEach(el => {
+        try { el.style.setProperty('top', '12px', 'important'); } catch (e) {}
+      });
     }
+  } catch (e) {
+    console.warn('[setHUDVisible] placement outer failed', e);
   }
 
   // Update toggle button(s) visibility (preserves your previous logic)
   document.querySelectorAll('#game-screen #toggle-hud-button').forEach(btn => {
     try {
       btn.textContent = hudVisible ? 'Hide HUD' : 'Show HUD';
-      btn.style.setProperty('z-index', '13001', 'important'); // ensure toggle stays above HUD
+      btn.style.setProperty('z-index', '13001', 'important');
 
       if (window.gameActive) {
         btn.style.setProperty('display', 'block', 'important');
@@ -4237,6 +4245,6 @@ if (!gameActive && (preGameCountdown > 0 || preGameState === "start")) {
       btn.style.setProperty('pointer-events', shouldShowToggle ? 'auto' : 'none', 'important');
     });
   }
-  
+
   });
 });

@@ -1760,4 +1760,44 @@ button:hover, .difficulty-btn:hover {
     margin-left: 3px !important;     /* A little margin before button  */
   }
 }
+
+/* Minimap: move to vertical middle-left of viewport so it's centered along the left edge */
+.minimap-frame {
+  position: fixed;
+  left: 8px;                    /* small gap from left */
+  top: 50%;                     /* center vertically */
+  transform: translateY(-50%);  /* center by height */
+  width: 140px;                 /* compact default size */
+  height: 112px;
+  background: rgba(7,28,38,0.16);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 6px;
+  z-index: 12500;
+  pointer-events: none;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.28);
+}
+
+/* Make sure minimap on very small screens shrinks slightly to avoid covering too much */
+@media (max-width: 420px) {
+  .minimap-frame {
+    left: 6px;
+    width: 120px;
+    height: 96px;
+    padding: 5px;
+  }
+}
+
+/* Adjust default mobile HUD baseline so it doesn't sit extremely high at first paint.
+   JS will still reposition it under the toggle when possible. */
+@media (max-width: 700px) {
+  #game-screen .game-info {
+    top: 54px !important;    /* a comfortable default */
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    max-width: calc(100% - 96px) !important;
+    padding: 6px 12px !important;
+    box-sizing: border-box;
+  }
+}
 /* End of file */
