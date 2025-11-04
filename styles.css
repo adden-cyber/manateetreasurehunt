@@ -1633,13 +1633,13 @@ button:hover, .difficulty-btn:hover {
 #game-screen .game-info .score,
 #game-screen .game-info .treasures,
 #game-screen .game-info .timer {
-  padding: 3px 6px;
+  padding: 5px 8px;
   font-weight: 800;
   color: #e6fbff;
   background: transparent;
   box-shadow: none;
   border: none;
-  font-size: 0.80em;
+  font-size: 0.70em;
 }
 
 /* Make toggle-hud-button a small floating pill at top-right, always visible during the game */
