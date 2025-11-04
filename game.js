@@ -1027,7 +1027,7 @@ function drawMinimap() {
   const MM_CSS_W = 140;
   const MM_CSS_H = 100;
   const PAD_LEFT_CSS = 10;    // same as .minimap-frame left
-  const PAD_TOP_CSS = 48;     // same as .minimap-frame top (under the HUD)
+  const PAD_TOP_CSS = window.innerWidth <= 700 ? 94 : 56;     // same as .minimap-frame top (under the HUD)
 
   const dpr = window.devicePixelRatio || 1;
 

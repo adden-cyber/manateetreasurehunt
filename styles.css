@@ -1703,4 +1703,32 @@ button:hover, .difficulty-btn:hover {
       box-sizing: border-box;
     }
   }
+
+  /* === MOBILE HUD FIX === */
+@media (max-width: 700px) {
+  /* HUD items larger so their full numbers show up, increase font-size and min-width */
+  #game-screen .game-info .score,
+  #game-screen .game-info .treasures,
+  #game-screen .game-info .timer {
+    /* min-width: 54px; */            /* original cramped value */
+    min-width: 90px !important;      /* enough for labels + value */
+    padding: 4px 10px !important;
+    font-size: 0.95em !important;
+    letter-spacing: 0.04em !important;
+    /* Optionally, allow text wrap if you expect loooong labels */
+    white-space: nowrap !important;
+  }
+}
+
+/* === MOBILE MINIMAP OFFSET FIX === */
+@media (max-width: 700px) {
+  /* move minimap lower so it doesn't overlap HUD */
+  .minimap-frame {
+    left: 10px !important;
+    top: 94px !important;          /* default was 54px or 56px, so push it down further */
+    width: 136px !important;
+    height: 96px !important;
+    z-index: 12500 !important;
+  }
+}
 /* End of file */
