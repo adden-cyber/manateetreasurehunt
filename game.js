@@ -2172,6 +2172,45 @@ if (mobileEndBtn) {
         });
       }
     }
+
+    // ------------------ ADD: position mobile HUD under minimap helper ------------------
+function positionMobileHudUnderMinimap() {
+  try {
+    const mm = document.querySelector('.minimap-frame');
+    const stack = document.getElementById('mobile-hud-stack');
+    if (!stack) return;
+
+    // If minimap not present, fallback to a conservative anchored position
+    if (!mm) {
+      stack.style.setProperty('position', 'fixed', 'important');
+      stack.style.setProperty('left', '12px', 'important');
+      stack.style.setProperty('top', '202px', 'important');
+      stack.style.setProperty('bottom', 'auto', 'important');
+      stack.style.setProperty('z-index', '12990', 'important');
+      return;
+    }
+
+    const r = mm.getBoundingClientRect();
+    const gap = 8; // px gap below minimap
+    const newTop = Math.round(r.bottom + gap);
+
+    // Apply computed position (use setProperty with 'important' so it overrides stylesheet !important)
+    stack.style.setProperty('position', 'fixed', 'important');
+    stack.style.setProperty('left', String(Math.max(8, Math.round(r.left))) + 'px', 'important');
+    stack.style.setProperty('top', String(newTop) + 'px', 'important');
+    stack.style.setProperty('bottom', 'auto', 'important');
+    stack.style.setProperty('z-index', '12990', 'important');
+
+    // keep ARIA consistent (optional)
+    try { stack.setAttribute('aria-hidden', window.innerWidth <= 700 ? 'false' : 'true'); } catch (e) {}
+  } catch (e) {
+    console.warn('[positionMobileHudUnderMinimap] failed', e);
+  }
+}
+// Call once immediately if possible (safe no-op if elements not yet present)
+try { positionMobileHudUnderMinimap(); } catch (e) {}
+// ------------------ END ADD ------------------
+
     // restore persisted credits (if any) so UI reflects them immediately
 const persistedCredits = localStorage.getItem('credits');
 if (persistedCredits !== null && typeof setCredits === 'function') {
@@ -2180,6 +2219,8 @@ if (persistedCredits !== null && typeof setCredits === 'function') {
   if (typeof updateStartButtonUI === 'function') updateStartButtonUI();
   if (typeof refreshFeedbackButton === 'function') refreshFeedbackButton();
 }
+
+try { positionMobileHudUnderMinimap(); } catch (e) {}
 
 // Show welcome if we already have an email
 if (typeof showWelcomeEmail === 'function') showWelcomeEmail();
@@ -3566,7 +3607,37 @@ function initGame(relocateManatee = true) {
   } catch (e) {
     console.warn('[initGame] post-start visibility update failed', e);
   }
+  try { positionMobileHudUnderMinimap(); } catch (e) {}
 }
+
+try {
+  // Ensure desktop toggle visibility according to hudVisible + gameActive
+  setHUDVisible(!!hudVisible);
+
+  const hudToggle = document.getElementById('toggle-hud-button');
+  if (hudToggle) {
+    hudToggle.style.setProperty('display', (window.gameActive && hudVisible) ? 'block' : 'none', 'important');
+    hudToggle.style.setProperty('pointer-events', (window.gameActive && hudVisible) ? 'auto' : 'none', 'important');
+    hudToggle.style.setProperty('visibility', (window.gameActive && hudVisible) ? 'visible' : 'hidden', 'important');
+    // Force reflow so some mobile browsers apply the new inline styles immediately
+    void hudToggle.offsetHeight;
+    requestAnimationFrame(() => { try { void hudToggle.offsetWidth; } catch (e) {} });
+  }
+
+  const mobileEnd = document.getElementById('end-game-button-mobile');
+  if (mobileEnd) {
+    const showMobileEnd = !!hudVisible && window.gameActive && (window.innerWidth <= 700);
+    mobileEnd.style.setProperty('display', showMobileEnd ? 'block' : 'none', 'important');
+    mobileEnd.style.setProperty('pointer-events', showMobileEnd ? 'auto' : 'none', 'important');
+    mobileEnd.setAttribute('aria-hidden', showMobileEnd ? 'false' : 'true');
+    // Force reflow
+    void mobileEnd.offsetHeight;
+    requestAnimationFrame(() => { try { void mobileEnd.offsetWidth; } catch (e) {} });
+  }
+} catch (e) {
+  console.warn('[initGame] final HUD forcing failed', e);
+}
+
 
 try {
   if (!window.gameActive) {
@@ -3584,6 +3655,7 @@ try {
         hudToggle.textContent = hudVisible ? 'Hide HUD' : 'Show HUD';
         // force reflow so styles take effect immediately on some mobile browsers
         void hudToggle.offsetHeight;
+        requestAnimationFrame(() => { try { void hudToggle.offsetWidth; } catch (e) {} });
       }
   
       if (mobileEnd) {
@@ -3596,6 +3668,7 @@ try {
           mobileEnd.setAttribute('aria-hidden', 'true');
         }
         void mobileEnd.offsetHeight;
+        requestAnimationFrame(() => { try { void mobileEnd.offsetWidth; } catch (e) {} });
       }
     } catch (e) {
       console.warn('[initGame] forcing HUD controls visible failed', e);
@@ -4018,15 +4091,20 @@ if (screenshakeTimer > 0) {
     
 
     window.addEventListener('resize', () => {
-  isMobile = detectMobile();
-  updateViewportSize();
-  render();
-});
-window.addEventListener('orientationchange', () => {
-  isMobile = detectMobile();
-  updateViewportSize();
-  render();
-});
+      isMobile = detectMobile();
+      updateViewportSize();
+      try { positionMobileHudUnderMinimap(); } catch (e) { /* ignore */ }
+      render();
+    });
+    window.addEventListener('orientationchange', () => {
+      isMobile = detectMobile();
+      updateViewportSize();
+      // allow the UI to settle after orientation change then reposition
+      setTimeout(() => {
+        try { positionMobileHudUnderMinimap(); } catch (e) { /* ignore */ }
+        render();
+      }, 120);
+    });
 window.addEventListener('beforeunload', () => {
   try {
     if (preGameInterval) { clearInterval(preGameInterval); preGameInterval = null; }

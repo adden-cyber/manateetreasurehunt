@@ -1323,25 +1323,25 @@ button:hover, .difficulty-btn:hover {
 
 /* Desktop HUD pill (single inline pill) */
 #game-screen .game-info {
-  position: fixed !important;
-  top: 14px !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  display: inline-flex !important;
-  gap: 8px !important;
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  gap: 8px;
   align-items: center;
   justify-content: center;
   background: linear-gradient(180deg, rgba(6,30,50,0.95), rgba(6,30,50,0.82));
-  padding: 4px 8px !important;
+  padding: 4px 8px;
   border-radius: 10px;
   backdrop-filter: blur(6px) saturate(1.05);
   border: 1px solid rgba(255,255,255,0.05);
   box-shadow: 0 8px 20px rgba(0,0,0,0.55);
-  z-index: 12000 !important;
+  z-index: 12000;
   font-size: 0.82rem;
   pointer-events: auto;
-  width: auto !important;
-  max-width: calc(100% - 120px) !important; /* leave room for toggle */
+  width: auto;
+  max-width: calc(100% - 120px); /* leave room for toggle */
 }
 
 /* HUD items (desktop) */
@@ -1378,10 +1378,10 @@ button:hover, .difficulty-btn:hover {
 
 /* Toggle HUD button */
 #toggle-hud-button {
-  position: fixed !important;
-  right: 12px !important;
-  top: 12px !important;
-  z-index: 13000 !important;
+  position: fixed;
+  right: 12px;
+  top: 12px;
+  z-index: 13000;
   font-size: 0.88em;
   padding: 6px 10px;
   border-radius: 12px;
@@ -1432,10 +1432,10 @@ button:hover, .difficulty-btn:hover {
 
   /* Hide desktop pill fully on mobile */
   #game-screen .game-info {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
+    display: none;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
   }
 
   /* Enable mobile-only elements */
@@ -1457,24 +1457,27 @@ button:hover, .difficulty-btn:hover {
 
   /* Left vertical stack positioned above joystick (default bottom offset).
      JS may reposition this at runtime for perfect non-overlap with minimap. */
-  #mobile-hud-stack {
-    position: fixed;
-    left: 12px;
-    bottom: calc(env(safe-area-inset-bottom, 16px) + 120px);
-    z-index: 12990;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    pointer-events: none;
-  }
-
-  #mobile-hud-stack .mobile-hud-pill,
-  #mobile-hud-time {
-    padding: 6px 10px;
-    font-size: 0.92rem;
-    min-width: 110px;
-    line-height: 1.05;
-  }
+     #mobile-hud-stack {
+      position: fixed;
+      left: 12px;
+      /* Let JS compute 'top' to place the stack beneath the minimap; fallback to bottom anchor */
+      top: auto;
+      bottom: calc(env(safe-area-inset-bottom, 16px) + 120px);
+      z-index: 12990;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+      padding-left: 6px;
+    }
+  
+    #mobile-hud-stack .mobile-hud-pill,
+    #mobile-hud-time {
+      padding: 6px 10px;
+      font-size: 0.92rem;
+      min-width: 110px;
+      line-height: 1.05;
+    }
 
   /* Further tweak for very small screens */
   @media (max-width: 420px) {
@@ -1482,7 +1485,6 @@ button:hover, .difficulty-btn:hover {
     #mobile-hud-stack { left: 10px; bottom: calc(env(safe-area-inset-bottom,12px) + 110px); }
   }
 }
-
 /* Pre-game hide helper for mobile: JS adds body.pre-game during countdown */
 @media (max-width: 700px) {
   body.pre-game .mobile-only,
@@ -1493,6 +1495,9 @@ button:hover, .difficulty-btn:hover {
     pointer-events: none !important;
   }
 }
+
+#joystick-container { z-index: 12800 !important; }
+
 
 /* Make joystick knob smooth */
 #joystick-stick {
@@ -1536,4 +1541,55 @@ button:hover, .difficulty-btn:hover {
   * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 
+/* ===== Mobile UI adjustments: smaller mobile End button + move mobile HUD stack under minimap ===== */
+
+/* Make mobile End Game button smaller and visually lighter than the toggle */
+#hud-controls #end-game-button-mobile {
+  font-size: 0.78rem;
+  padding: 6px 10px;
+  border-radius: 10px;
+  min-width: 78px;
+  background: linear-gradient(180deg,#00c4d8,#00a3bf);
+  color: #002;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.24);
+  border: none;
+  cursor: pointer;
+  display: none; /* default hidden, JS controls display */
+}
+
+/* Slightly reduce the toggle so the mobile end looks smaller in comparison */
+#hud-controls #toggle-hud-button {
+  font-size: 0.9rem;
+  padding: 7px 12px;
+  border-radius: 12px;
+}
+
+
+/* Small refinement: reduce the mobile HUD pill width so it doesn't overlap minimap */
+#mobile-hud-stack .mobile-hud-pill {
+  min-width: 120px;
+  padding: 6px 8px;
+  font-size: 0.88rem;
+}
+
+/* Make sure the joystick area stays clear and isn't overlapped by the pills */
+#joystick-container {
+  z-index: 12800 !important; /* sit underneath mobile-hud-stack which is 12990 */
+}
+
+@media (max-width: 700px) {
+  #mobile-hud-stack {
+    position: fixed !important;
+    left: 12px !important;
+    /* Let JS compute a top; if JS doesn't run, use a conservative bottom anchor */
+    top: auto !important;
+    bottom: calc(env(safe-area-inset-bottom, 16px) + 120px) !important;
+    z-index: 12990 !important;
+    display: flex !important;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+    padding-left: 6px;
+  }
+}
 /* End of styles.css */
