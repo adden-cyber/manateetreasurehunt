@@ -1490,36 +1490,27 @@ function showJoystick(show) {
     if (!joystickContainer) return;
 
     if (show) {
-      // Make visible and interactive
       joystickContainer.style.setProperty('display', 'block', 'important');
       joystickContainer.style.setProperty('pointer-events', 'auto', 'important');
-
-      // Ensure baseRect is current (use single global updater)
+      // center the knob visually
       refreshBaseRect();
-
-      if (baseRect && joystickStick && joystickBase) {
-        const baseW = baseRect.width || joystickBase.offsetWidth || 120;
-        const baseH = baseRect.height || joystickBase.offsetHeight || 120;
-        const stickW = joystickStick.offsetWidth || joystickStick.getBoundingClientRect().width || 40;
-        const stickH = joystickStick.offsetHeight || joystickStick.getBoundingClientRect().height || 40;
-
-        // center the knob (use left/top for a stable origin; move via transform for smoothness)
-        joystickStick.style.left = (baseW / 2 - stickW / 2) + 'px';
-        joystickStick.style.top = (baseH / 2 - stickH / 2) + 'px';
-        joystickStick.style.transform = 'translate(0px, 0px)';
-        joystickStick.style.transition = 'transform 0.06s linear';
-        joystickStick.style.willChange = 'transform';
+      if (joystickStick && joystickBase) {
+        try {
+          const baseW = joystickBase.offsetWidth || 110;
+          const baseH = joystickBase.offsetHeight || 110;
+          const stickW = joystickStick.offsetWidth || 40;
+          const stickH = joystickStick.offsetHeight || 40;
+          joystickStick.style.left = (baseW / 2 - stickW / 2) + 'px';
+          joystickStick.style.top = (baseH / 2 - stickH / 2) + 'px';
+          joystickStick.style.transform = 'translate(0px, 0px)';
+        } catch (e) { /* ignore positioning errors */ }
       }
-
       joystickActive = false;
     } else {
-      // Hide reliably and reset the knob
-      if (joystickContainer) {
-        joystickContainer.style.setProperty('display', 'none', 'important');
-        joystickContainer.style.setProperty('pointer-events', 'none', 'important');
-      }
+      joystickContainer.style.setProperty('display', 'none', 'important');
+      joystickContainer.style.setProperty('pointer-events', 'none', 'important');
       if (joystickStick) {
-        joystickStick.style.transition = ''; // clear transition when hidden
+        joystickStick.style.transition = '';
         try { joystickStick.style.transform = 'translate(0px, 0px)'; } catch (e) {}
       }
       joystickActive = false;
@@ -3186,27 +3177,30 @@ if (data.sessionId) sessionId = data.sessionId;
  ensureStartButtonIdle();
 
     // startPreGameCountdown (minimal edit: avoid initial redundant setHUDVisible(false))
-function startPreGameCountdown() {
-  try {
-    console.log('[startPreGameCountdown] start requested');
-    const hudBtn = document.getElementById('toggle-hud-button');
-    if (hudBtn) hudBtn.style.display = "none";
-
-    stopAnimationLoop();
-    isGameOver = false;
-    explosionActive = false;
-    confettiActive = false;
-    celebrationActive = false;
-
-    // Ensure gameScreen is resolved
-    if (!gameScreen) gameScreen = document.getElementById('game-screen');
-    if (!gameScreen) {
-      console.error('[startPreGameCountdown] Missing #game-screen');
-      updateStartButtonUI('Start Game');
-      const btn = startButton || document.getElementById('start-button');
-      if (btn) btn.disabled = false;
-      return;
-    }
+    function startPreGameCountdown() {
+      try {
+        console.log('[startPreGameCountdown] start requested');
+    
+        // Ensure the UI is marked as pre-game so mobile pills/joystick are hidden by CSS immediately.
+        try { document.body.classList.add('pre-game'); } catch (e) {}
+    
+        const hudBtn = document.getElementById('toggle-hud-button');
+        if (hudBtn) hudBtn.style.display = "none";
+    
+        stopAnimationLoop();
+        isGameOver = false;
+        explosionActive = false;
+        confettiActive = false;
+        celebrationActive = false;
+    
+        if (!gameScreen) gameScreen = document.getElementById('game-screen');
+        if (!gameScreen) {
+          console.error('[startPreGameCountdown] Missing #game-screen');
+          updateStartButtonUI('Start Game');
+          const btn = startButton || document.getElementById('start-button');
+          if (btn) btn.disabled = false;
+          return;
+        }
 
     // Show the game screen first, then hide HUD to avoid toggling it visible briefly
     showScreen(gameScreen);
@@ -3223,11 +3217,7 @@ try {
     // Verify canvas/context
     if (!canvas) canvas = document.getElementById('game-canvas');
     if (!ctx && canvas) {
-      try {
-        ctx = canvas.getContext('2d');
-      } catch (e) {
-        console.error('[startPreGameCountdown] getContext failed', e);
-      }
+      try { ctx = canvas.getContext('2d'); } catch (e) { console.error('[startPreGameCountdown] getContext failed', e); }
     }
     if (!canvas || !ctx) {
       console.error('[startPreGameCountdown] missing canvas or context', { canvas, ctx });
@@ -3236,9 +3226,8 @@ try {
       if (btn) btn.disabled = false;
       return;
     }
-
     // Hide HUD during countdown (after showing the game screen so we don't cause a transient show)
-    setHUDVisible(false);
+    try { setMobileHudVisible(false); } catch (e) {}
 
     preGameCountdown = PRE_GAME_TIMER;
     preGameState = "count";
@@ -3506,16 +3495,23 @@ function initGame(relocateManatee = true) {
   window.gameActive = true;
   window.__gameInitCompleted = true;
 
-  // IMPORTANT: ensure HUD is visible when the game starts (fix for "HUD always hidden on start")
-  try {
-    setHUDVisible(true);
-  } catch (e) {
-    console.warn('[initGame] setHUDVisible failed', e);
-  }
+  // Remove pre-game class so mobile CSS no longer forcibly hides mobile HUD / joystick
+  try { document.body.classList.remove('pre-game'); } catch (e) {}
 
-  // Also ensure joystick is visible on mobile when the game starts
-  if (isMobile) {
-    try { showJoystick(true); } catch (e) { console.warn('[initGame] showJoystick failed', e); }
+  // Ensure HUD and joystick visibility follow the hudVisible flag (mobile pills and joystick show only now)
+  try {
+    // show/hide mobile pills (this will apply !important inline display)
+    setMobileHudVisible(!!hudVisible);
+
+    // show joystick on mobile if HUD is allowed and the game is mobile
+    if (isMobile) {
+      // only show joystick once the game is running
+      showJoystick(true);
+    } else {
+      showJoystick(false);
+    }
+  } catch (e) {
+    console.warn('[initGame] post-start visibility update failed', e);
   }
 }
    
@@ -3548,10 +3544,21 @@ function updateMobileHudValues() {
 
 function setMobileHudVisible(visible) {
   try {
-    const shouldShow = visible && window.innerWidth <= 700;
-    const display = shouldShow ? 'block' : 'none';
+    const shouldShow = !!visible && window.innerWidth <= 700;
+    const displayVal = shouldShow ? 'block' : 'none';
     const nodes = document.querySelectorAll('.mobile-only');
-    nodes.forEach(n => n.style.display = display);
+    nodes.forEach(n => {
+      try {
+        n.style.setProperty('display', displayVal, 'important');
+        // keep ARIA in sync
+        n.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+      } catch (e) {
+        // fallback
+        try { n.style.display = displayVal; } catch (e2) {}
+      }
+    });
+
+    // If showing, immediately sync values
     if (shouldShow) updateMobileHudValues();
   } catch (e) {
     console.warn('[setMobileHudVisible] failed', e);
