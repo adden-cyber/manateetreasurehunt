@@ -3641,6 +3641,27 @@ function initGame(relocateManatee = true) {
   window.gameActive = true;
   window.__gameInitCompleted = true;
 
+  try {
+    // Force the HUD to be 'shown' at game start so the toggle and mobile pills are visible.
+    hudVisible = true;
+    try { setHUDVisible(true); } catch (e) { /* ignore */ }
+    try { setMobileHudVisible(true); } catch (e) { /* ignore */ }
+  
+    // Keep aria state consistent for assistive tech
+    try {
+      const hudToggle = document.getElementById('toggle-hud-button');
+      if (hudToggle) hudToggle.setAttribute('aria-pressed', 'true');
+    } catch (e) {}
+  
+    // Force a repaint/composite refresh immediately (rAF + timeout fallback)
+    try {
+      requestAnimationFrame(() => ensureHudControlsVisible());
+      setTimeout(() => ensureHudControlsVisible(), 48);
+    } catch (e) { /* ignore */ }
+  } catch (e) {
+    console.warn('[initGame] ensure HUD shown failed', e);
+  }
+
   // Remove pre-game class so mobile CSS no longer forcibly hides mobile HUD / joystick
   try { document.body.classList.remove('pre-game'); } catch (e) {}
 

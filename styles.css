@@ -1557,6 +1557,15 @@ button:hover, .difficulty-btn:hover {
   display: none; /* default hidden, JS controls display */
 }
 
+@media (max-width: 700px) {
+  /* Lower mobile end button so it sits clearly below the HUD toggle */
+  #hud-controls #end-game-button-mobile {
+    margin-top: 44px !important;  /* adjust value if you want more/less spacing */
+    /* make sure it's visually above the canvas and not clipped */
+    z-index: 16002 !important;
+  }
+}
+
 /* Slightly reduce the toggle so the mobile end looks smaller in comparison */
 #hud-controls #toggle-hud-button {
   font-size: 0.9rem;
