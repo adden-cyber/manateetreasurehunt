@@ -2405,108 +2405,85 @@ if (registerSuccessPopup) {
 
 // REPLACE the existing setHUDVisible(...) function with this corrected version.
 function setHUDVisible(visible) {
-  const hudEls = document.querySelectorAll('#game-screen .game-info');
+  // Normalize to boolean
+  hudVisible = !!visible;
 
-  hudEls.forEach(el => {
+  // Decide whether we should present the desktop pill
+  const isNarrow = (typeof window !== 'undefined') ? (window.innerWidth <= 700) : false;
+  const shouldShowDesktop = hudVisible && !isNarrow;
+
+  // Apply desktop pill changes (but only when we are actually on desktop)
+  document.querySelectorAll('#game-screen .game-info').forEach(el => {
     try {
-      // Keep fixed top-center positioning
-      el.style.setProperty('position', 'fixed', 'important');
-      el.style.setProperty('left', '50%', 'important');
-      el.style.setProperty('transform', 'translateX(-50%)', 'important');
-      el.style.setProperty('display', 'inline-flex', 'important');
-      el.style.setProperty('flex-wrap', 'nowrap', 'important');
-      el.style.setProperty('white-space', 'nowrap', 'important');
+      // keep stable positioning for desktop; do not force inline display on narrow screens
+      el.style.removeProperty('position');
+      el.style.removeProperty('left');
+      el.style.removeProperty('transform');
+      el.style.removeProperty('display');
+      el.style.removeProperty('gap');
+      el.style.removeProperty('padding');
+      el.style.removeProperty('font-size');
+      el.style.removeProperty('align-items');
+      el.style.removeProperty('top');
+      el.style.removeProperty('z-index');
 
-      // Default spacing/padding for desktop
-      el.style.setProperty('gap', '10px', 'important');
-      el.style.setProperty('padding', '6px 10px', 'important');
-      el.style.setProperty('font-size', '1.0em', 'important');
-      el.style.setProperty('align-items', 'center', 'important');
+      if (shouldShowDesktop) {
+        // Desktop: ensure visible and positioned
+        el.style.setProperty('position', 'fixed', 'important');
+        el.style.setProperty('left', '50%', 'important');
+        el.style.setProperty('transform', 'translateX(-50%)', 'important');
+        el.style.setProperty('display', 'inline-flex', 'important');
+        el.style.setProperty('flex-wrap', 'nowrap', 'important');
+        el.style.setProperty('white-space', 'nowrap', 'important');
+        el.style.setProperty('gap', '10px', 'important');
+        el.style.setProperty('padding', '6px 10px', 'important');
+        el.style.setProperty('font-size', '1.0em', 'important');
+        el.style.setProperty('align-items', 'center', 'important');
+        el.style.setProperty('top', '20px', 'important');
+        el.style.setProperty('z-index', '12999', 'important');
 
-      // ensure a conservative top so it's not too close to the very top initially
-      // The mobile-specific reposition will run below if needed
-      el.style.setProperty('top', '20px', 'important');
-      el.style.setProperty('z-index', '12999', 'important');
+        el.style.setProperty('visibility', 'visible', 'important');
+        el.style.setProperty('opacity', '1', 'important');
+      } else {
+        // Hide desktop pill: leave layout to CSS (ensures mobile CSS takes over)
+        // Use important so stray inline styles elsewhere won't bring it back on mobile.
+        el.style.setProperty('visibility', 'hidden', 'important');
+        el.style.setProperty('opacity', '0', 'important');
+        // keep 'display' as 'none' for narrow screens so it is not interactable
+        el.style.setProperty('display', 'none', 'important');
+      }
     } catch (e) {
-      // ignore style application failures on some browsers
-    }
-
-    // Show/hide while keeping layout stable:
-    if (visible) {
-      el.style.setProperty('visibility', 'visible', 'important');
-      el.style.setProperty('opacity', '1', 'important');
-      el.style.setProperty('display', 'inline-flex', 'important');
-    } else {
-      el.style.setProperty('visibility', 'hidden', 'important');
-      el.style.setProperty('opacity', '0', 'important');
-      el.style.setProperty('display', 'inline-flex', 'important');
+      console.warn('[setHUDVisible] failed to update desktop pill', e);
     }
   });
 
-  hudVisible = !!visible;
+  // Keep end game button stable (desktop or mobile)
+  const endBtn = document.getElementById('end-game-button');
+  if (endBtn) {
+    try {
+      endBtn.style.setProperty('flex', '0 0 auto', 'important');
+      endBtn.style.setProperty('min-width', '62px', 'important');
+      endBtn.style.setProperty('white-space', 'nowrap', 'important');
+    } catch (e) {}
+  }
 
-  // Ensure HUD content (score/treasures/time) is current whenever we show the HUD
+  // Ensure HUD content is current when visible
   if (hudVisible) {
     try {
-      // Keep numeric UI in sync immediately
       if (typeof updateScoreDisplay === 'function') updateScoreDisplay();
       if (typeof updateTimerDisplay === 'function') updateTimerDisplay();
     } catch (e) { /* ignore */ }
   }
 
-  // Mobile-specific shrink and placement under the toggle (or safe fallback)
+  // Update the mobile-only HUD via the central helper.
+  // setMobileHudVisible will itself check viewport width and only show on narrow screens.
   try {
-    const toggle = document.getElementById('toggle-hud-button');
-    const hud = document.querySelector('#game-screen .game-info');
-    // If mobile or toggle exists and is visible, place HUD pill under the toggle to avoid overlap.
-    if ((typeof isMobile !== 'undefined' && isMobile) || (toggle && window.getComputedStyle(toggle).display !== 'none')) {
-      document.querySelectorAll('#game-screen .game-info').forEach(el => {
-        try {
-          el.style.setProperty('gap', '6px', 'important');
-          el.style.setProperty('padding', '4px 8px', 'important');
-          el.style.setProperty('font-size', '0.85em', 'important');
-          el.style.setProperty('max-width', 'calc(100% - 120px)', 'important'); // leave room for toggle
-        } catch (e) {}
-      });
-
-      // If we have the toggle's position, place HUD just below its bottom edge
-      try {
-        if (toggle && hud && hudVisible) {
-          const tRect = toggle.getBoundingClientRect();
-          // If toggle is offscreen/hidden, fall back to reasonable top
-          let desiredTop =  Math.round((tRect && tRect.bottom) ? (tRect.bottom + 6) : 56);
-          // Prevent HUD from being pushed off the bottom
-          const maxTop = Math.max(18, window.innerHeight - 72);
-          if (desiredTop > maxTop) desiredTop = maxTop;
-          hud.style.setProperty('top', `${desiredTop}px`, 'important');
-          hud.style.setProperty('left', '50%', 'important');
-          hud.style.setProperty('transform', 'translateX(-50%)', 'important');
-
-          // Ensure toggle above hud
-          try {
-            toggle.style.setProperty('z-index', '13001', 'important');
-            hud.style.setProperty('z-index', '12999', 'important');
-          } catch (e) {}
-        } else {
-          // fallback top for mobile if no toggle measurement available
-          document.querySelectorAll('#game-screen .game-info').forEach(el => {
-            try { el.style.setProperty('top', '56px', 'important'); } catch (e) {}
-          });
-        }
-      } catch (e) {
-        console.warn('[setHUDVisible] mobile placement failed', e);
-      }
-    } else {
-      // Desktop default top
-      document.querySelectorAll('#game-screen .game-info').forEach(el => {
-        try { el.style.setProperty('top', '12px', 'important'); } catch (e) {}
-      });
-    }
+    setMobileHudVisible(hudVisible);
   } catch (e) {
-    console.warn('[setHUDVisible] placement outer failed', e);
+    console.warn('[setHUDVisible] setMobileHudVisible failed', e);
   }
 
-  // Update toggle button(s) visibility (preserves your previous logic)
+  // Update toggle button(s) text/visibility
   document.querySelectorAll('#game-screen #toggle-hud-button').forEach(btn => {
     try {
       btn.textContent = hudVisible ? 'Hide HUD' : 'Show HUD';
@@ -2517,28 +2494,13 @@ function setHUDVisible(visible) {
         btn.style.setProperty('pointer-events', 'auto', 'important');
         btn.style.removeProperty('visibility');
         btn.style.removeProperty('opacity');
-        if (!hudVisible) {
-          btn.style.opacity = '0.85';
-        } else {
-          btn.style.opacity = '';
-        }
+        btn.style.opacity = hudVisible ? '' : '0.85';
       } else {
         btn.style.setProperty('display', 'none', 'important');
         btn.style.setProperty('pointer-events', 'none', 'important');
       }
     } catch (e) {}
   });
-
-  // Keep end game button stable
-  const endBtn = document.getElementById('end-game-button');
-  if (endBtn) {
-    try {
-      endBtn.style.setProperty('flex', '0 0 auto', 'important');
-      endBtn.style.setProperty('min-width', '62px', 'important');
-      endBtn.style.setProperty('white-space', 'nowrap', 'important');
-    } catch (e) {}
-  }
-  try { setMobileHudVisible(hudVisible); } catch (e) {}
 }
 
 // Ensure HUD reflow after resize/orientation so 'top' placement below toggle stays correct

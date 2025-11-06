@@ -1858,4 +1858,17 @@ button:hover, .difficulty-btn:hover {
     min-width: 120px;
   }
 }
+
+/* ADD near the end of styles.css (or append). This guarantees the desktop pill is never shown on small screens,
+   even if JS tries to set inline styles. */
+   @media (max-width: 700px) {
+    /* hide the desktop HUD pill on mobile (strong rule with !important) */
+    #desktop-hud,
+    #game-screen .game-info {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+  }
 /* End of file */
