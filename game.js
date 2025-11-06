@@ -2567,7 +2567,11 @@ function setHUDVisible(visible) {
       } catch (e) {
         console.warn('[setHUDVisible] mobile end btn update failed', e);
       }
-}
+      try {
+        requestAnimationFrame(() => ensureHudControlsVisible());
+        setTimeout(() => ensureHudControlsVisible(), 48);
+      } catch (e) { /* ignore */ }
+  }
 
 // Ensure HUD reflow after resize/orientation so 'top' placement below toggle stays correct
 window.addEventListener('resize', () => {
@@ -3464,6 +3468,54 @@ function placeMermaidsFromPattern() {
   return arr;
 }
 
+function ensureHudControlsVisible() {
+  try {
+    const hudToggle = document.getElementById('toggle-hud-button');
+    const mobileEnd = document.getElementById('end-game-button-mobile');
+    const hudControls = document.getElementById('hud-controls');
+
+    // Defensive inline styling so CSS with !important can't hide these accidentally
+    if (hudToggle) {
+      hudToggle.style.setProperty('display', (window.gameActive ? 'block' : 'none'), 'important');
+      hudToggle.style.setProperty('pointer-events', window.gameActive ? 'auto' : 'none', 'important');
+      hudToggle.style.setProperty('visibility', window.gameActive ? 'visible' : 'hidden', 'important');
+      try { hudToggle.setAttribute('aria-hidden', window.gameActive ? 'false' : 'true'); } catch(e){}
+    }
+    if (mobileEnd) {
+      const showMobileEnd = !!hudVisible && window.gameActive && (window.innerWidth <= 700);
+      mobileEnd.style.setProperty('display', showMobileEnd ? 'block' : 'none', 'important');
+      mobileEnd.style.setProperty('pointer-events', showMobileEnd ? 'auto' : 'none', 'important');
+      try { mobileEnd.setAttribute('aria-hidden', showMobileEnd ? 'false' : 'true'); } catch(e){}
+    }
+
+    // Force a small repaint/composite update on mobile:
+    // reading layout (getBoundingClientRect) then applying a trivial GPU transform
+    // forces the browser to create/refresh the composited layer for fixed elements.
+    if (hudControls) {
+      hudControls.style.setProperty('will-change', 'transform, opacity', 'important');
+      // read layout
+      hudControls.getBoundingClientRect();
+      // cause a composite layer
+      hudControls.style.setProperty('transform', 'translateZ(0)', 'important');
+      // read another property to ensure the change was applied
+      void hudControls.offsetHeight;
+      // remove the temporary transform on the next frame so we don't keep a persistent transform
+      requestAnimationFrame(() => {
+        try {
+          hudControls.style.removeProperty('transform');
+          hudControls.style.removeProperty('will-change');
+        } catch (e) { /* ignore */ }
+      });
+    } else {
+      // global fallback reflow
+      document.body.getBoundingClientRect();
+      requestAnimationFrame(()=>{});
+    }
+  } catch (e) {
+    console.warn('[ensureHudControlsVisible] failed', e);
+  }
+}
+
 // Cleaned up initGame function:
 function initGame(relocateManatee = true) {
   // If somehow config is missing, guarantee defaults
@@ -3608,7 +3660,13 @@ function initGame(relocateManatee = true) {
     console.warn('[initGame] post-start visibility update failed', e);
   }
   try { positionMobileHudUnderMinimap(); } catch (e) {}
+  
+  try {
+    requestAnimationFrame(() => ensureHudControlsVisible());
+    setTimeout(() => ensureHudControlsVisible(), 48);
+  } catch (e) { /* ignore */ }
 }
+
 
 try {
   // Ensure desktop toggle visibility according to hudVisible + gameActive
@@ -3637,6 +3695,9 @@ try {
 } catch (e) {
   console.warn('[initGame] final HUD forcing failed', e);
 }
+
+
+
 
 
 try {
