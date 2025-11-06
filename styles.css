@@ -1800,4 +1800,62 @@ button:hover, .difficulty-btn:hover {
     box-sizing: border-box;
   }
 }
+
+/* ===== MOBILE HUD: append to end of file ===== */
+.mobile-only { display: none; }
+
+/* base mobile pill style */
+.mobile-hud-pill {
+  background: linear-gradient(180deg, rgba(6,30,50,0.95), rgba(6,30,50,0.86));
+  color: #e6fbff;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: 0.95rem;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.04);
+  pointer-events: none;
+}
+
+/* Desktop: keep existing HUD shown (no changes) */
+
+/* Mobile-only layout and positioning */
+@media (max-width: 700px) {
+  /* hide the desktop single-pill HUD on narrow screens */
+  #game-screen .game-info { display: none !important; }
+
+  /* enable mobile-only elements */
+  .mobile-only { display: block !important; }
+
+  /* time pill centered at top (line with toggle button) */
+  #mobile-hud-time {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 13050;
+    display: block;
+    min-width: 160px;
+    text-align: center;
+  }
+
+  /* left vertical stack positioned under minimap area (adjust left/top if you place minimap elsewhere) */
+  #mobile-hud-stack {
+    position: fixed;
+    left: 10px;              /* same column as minimap */
+    top: calc(56px + 8px);   /* place beneath minimap / HUD area */
+    z-index: 12990;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* make those Pills slightly larger / readable on mobile */
+  #mobile-hud-stack .mobile-hud-pill,
+  #mobile-hud-time {
+    padding: 6px 12px;
+    font-size: 1rem;
+    min-width: 120px;
+  }
+}
 /* End of file */

@@ -2538,6 +2538,7 @@ function setHUDVisible(visible) {
       endBtn.style.setProperty('white-space', 'nowrap', 'important');
     } catch (e) {}
   }
+  try { setMobileHudVisible(hudVisible); } catch (e) {}
 }
 
 // Ensure HUD reflow after resize/orientation so 'top' placement below toggle stays correct
@@ -3565,15 +3566,48 @@ try {
   };
 } catch (e) { /* ignore if scope prevents exposure */ }
     
-    function updateScoreDisplay() {
-      if (scoreValue) scoreValue.textContent = score;
-      if (treasuresCollected) treasuresCollected.textContent = collectedTreasures;
-      if (totalTreasures) totalTreasures.textContent = TOTAL_TREASURES;
-    }
+function updateMobileHudValues() {
+  try {
+    const tValEl = document.getElementById('timer-value');
+    const hudTime = document.getElementById('hud-time-value');
+    if (hudTime && tValEl) hudTime.textContent = tValEl.textContent || String(GAME_TIME_SECONDS || 0);
 
-    function updateTimerDisplay() {
-      if (!gameActive || celebrationActive || isGameOver || explosionActive) return;
-      
+    const hudTre = document.getElementById('hud-treasures-value');
+    const hudTot = document.getElementById('hud-total-value');
+    const hudScore = document.getElementById('hud-score-value');
+
+    if (hudTre) hudTre.textContent = (typeof collectedTreasures !== 'undefined') ? String(collectedTreasures) : '0';
+    if (hudTot) hudTot.textContent = (typeof TOTAL_TREASURES !== 'undefined') ? String(TOTAL_TREASURES) : '0';
+    if (hudScore) hudScore.textContent = (typeof score !== 'undefined') ? String(score) : '0';
+  } catch (e) {
+    console.warn('[updateMobileHudValues] failed', e);
+  }
+}
+
+function setMobileHudVisible(visible) {
+  try {
+    const shouldShow = visible && window.innerWidth <= 700;
+    const display = shouldShow ? 'block' : 'none';
+    const nodes = document.querySelectorAll('.mobile-only');
+    nodes.forEach(n => n.style.display = display);
+    if (shouldShow) updateMobileHudValues();
+  } catch (e) {
+    console.warn('[setMobileHudVisible] failed', e);
+  }
+}
+
+function updateScoreDisplay() {
+  if (scoreValue) scoreValue.textContent = score;
+  if (treasuresCollected) treasuresCollected.textContent = collectedTreasures;
+  if (totalTreasures) totalTreasures.textContent = TOTAL_TREASURES;
+
+  // keep mobile pills in sync
+  try { updateMobileHudValues(); } catch (e) { /* ignore */ }
+}
+
+function updateTimerDisplay() {
+  // keep original guard conditions so we don't update during end/celebration/explosion
+  if (!gameActive || celebrationActive || isGameOver || explosionActive) return;
 
   const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
   const remaining = Math.max(0, gameTimer - elapsed);
@@ -3582,6 +3616,9 @@ try {
   if (remaining <= 0) {
     endGame(true);
   }
+
+  // keep mobile pills in sync
+  try { updateMobileHudValues(); } catch (e) {}
 }
 
 function endGame(timeUp = false) {

@@ -312,30 +312,7 @@
     - Use inline-flex and auto width so it does NOT stretch full width
     - Adjusted: slightly larger top spacing and much smaller typography & padding
  */
- #game-screen .game-info {
-   position: fixed !important;
-   top: 22px !important; /* moved further from the very top */
-   left: 50% !important;
-   transform: translateX(-50%) !important;
-   display: inline-flex !important;
-   gap: 6px; /* tightened */
-   align-items: center;
-   justify-content: center;
-   background: linear-gradient(180deg, rgba(6,30,50,0.85), rgba(6,30,50,0.65));
-   padding: 4px 8px !important; /* smaller */
-   border-radius: 10px;
-   backdrop-filter: blur(6px) saturate(1.05);
-   border: 1px solid rgba(255,255,255,0.06);
-   box-shadow: 0 10px 30px rgba(0,0,0,0.55);
-   z-index: 99999 !important; /* very high so it sits above canvas and panels */
-   pointer-events: auto;
-   min-width: 0;
-   width: auto !important;     /* IMPORTANT: do not stretch */
-   max-width: none !important; /* IMPORTANT: do not stretch */
-   box-sizing: content-box;
-   margin: 0 auto;
-   font-size: 0.88rem; /* smaller overall HUD typography */
- }
+ 
 
  /* HUD items (light text on dark pill) */
  #game-screen .game-info .score,
@@ -365,22 +342,7 @@
    font-size: 0.82em;
  }
 
- /* smaller HUD on small screens */
- @media (max-width: 700px) {
-   #game-screen .game-info {
-     top: 16px !important;
-     gap: 6px;
-     padding: 4px 6px !important;
-     font-size: 0.78rem; /* further reduction on narrow screens */
-   }
-   #game-screen .game-info .score,
-   #game-screen .game-info .treasures,
-   #game-screen .game-info .timer {
-     font-size: 0.74em;
-     padding: 2px 6px;
-   }
-   #game-screen .game-info #end-game-button { padding: 4px 6px; font-size: 0.78em; }
- }
+ 
 
  /* Play History — white card with blue outline (matches leaderboard style screenshot) */
  #user-sessions-container {
@@ -595,12 +557,24 @@
       
 <!-- rest of file unchanged -->
       <div id="game-screen" class="screen hidden">
-            <div class="game-info">
-                <div class="score">Score: <span id="score-value">0</span></div>
-                <div class="treasures">Treasures: <span id="treasures-collected">0</span>/<span id="total-treasures">0</span></div>
-                <div class="timer">Time: <span id="timer-value">90</span>s</div>
-                <button id="end-game-button" style="margin-left:20px;">End Game</button>
-            </div>
+        <div class="game-info" id="desktop-hud">
+          <div class="score">Score: <span id="score-value">0</span></div>
+          <div class="treasures">Treasures: <span id="treasures-collected">0</span>/<span id="total-treasures">0</span></div>
+          <div class="timer">Time: <span id="timer-value">90</span>s</div>
+          <button id="end-game-button" style="margin-left:20px;">End Game</button>
+        </div>
+        
+        <!-- MOBILE: separate pills (mobile-only) -->
+        <!-- Time pill (top-center) -->
+        <div id="mobile-hud-time" class="mobile-only mobile-hud-pill" aria-hidden="true">
+          Time: <span id="hud-time-value">90</span>s
+        </div>
+        
+        <!-- Vertical stack under minimap: treasure above score -->
+        <div id="mobile-hud-stack" class="mobile-only" aria-hidden="true">
+          <div id="mobile-hud-treasures" class="mobile-hud-pill">Treasures: <span id="hud-treasures-value">0</span>/<span id="hud-total-value">0</span></div>
+          <div id="mobile-hud-score" class="mobile-hud-pill">Score: <span id="hud-score-value">0</span></div>
+        </div>
             <button id="toggle-hud-button" style="display:none;">Hide HUD</button>
             <canvas id="game-canvas" width="1800" height="1200"></canvas>
         </div>
