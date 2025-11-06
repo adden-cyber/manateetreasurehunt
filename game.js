@@ -2122,6 +2122,23 @@ quitPlayAgainButton.addEventListener('click', () => {
     }
 
     endGameButton = document.getElementById('end-game-button');
+    const mobileEndBtn = document.getElementById('end-game-button-mobile');
+if (mobileEndBtn) {
+  // accessibility attributes and initial state
+  try { mobileEndBtn.setAttribute('aria-label', 'End Game'); } catch (e) {}
+  try { mobileEndBtn.setAttribute('aria-hidden', 'true'); } catch (e) {}
+
+  // avoid adding duplicate listeners
+  if (!mobileEndBtn.__wired) {
+    mobileEndBtn.__wired = true;
+    mobileEndBtn.addEventListener('click', () => {
+      if (!isGameOver) {
+        try { logEndGame(true); } catch (e) { console.warn('mobile end-game log failed', e); }
+        try { showGameEndedResult(); } catch (e) { console.warn('mobile end-game show failed', e); }
+      }
+    });
+  }
+}
     scoreValue = document.getElementById('score-value');
     treasuresCollected = document.getElementById('treasures-collected');
     totalTreasures = document.getElementById('total-treasures');
@@ -2137,19 +2154,24 @@ quitPlayAgainButton.addEventListener('click', () => {
     let gameInfo = document.querySelector('#game-screen .game-info');
      let toggleHudBtn = document.querySelector('#game-screen #toggle-hud-button');
  
-    {
-  const hudToggle = document.getElementById('toggle-hud-button');
-  if (hudToggle) {
-    // ensure it's a button (safe) and visible above canvas
-    hudToggle.type = hudToggle.type || 'button';
-    hudToggle.style.setProperty('z-index', '1600', 'important');
-
-    // attach a single handler that toggles the HUD
-    hudToggle.addEventListener('click', () => {
-      setHUDVisible(!hudVisible);
-    });
-  }
-}
+     {
+      const hudToggle = document.getElementById('toggle-hud-button');
+      if (hudToggle) {
+        // ensure it's a button (safe), accessible, and visible above canvas
+        hudToggle.type = hudToggle.type || 'button';
+        hudToggle.setAttribute('aria-label', 'Toggle HUD');
+        hudToggle.setAttribute('aria-pressed', String(!!hudVisible));
+        hudToggle.style.setProperty('z-index', '1600', 'important');
+    
+        // attach a single handler that toggles the HUD and updates aria state
+        hudToggle.addEventListener('click', () => {
+          setHUDVisible(!hudVisible);
+          try {
+            hudToggle.setAttribute('aria-pressed', String(!!hudVisible));
+          } catch (e) { /* ignore */ }
+        });
+      }
+    }
     // restore persisted credits (if any) so UI reflects them immediately
 const persistedCredits = localStorage.getItem('credits');
 if (persistedCredits !== null && typeof setCredits === 'function') {
@@ -2492,6 +2514,18 @@ function setHUDVisible(visible) {
       }
     } catch (e) {}
   });
+
+  try {
+        const mobileEnd = document.getElementById('end-game-button-mobile');
+        if (mobileEnd) {
+          const showMobileEnd = !!hudVisible && window.gameActive && (window.innerWidth <= 700);
+          mobileEnd.style.setProperty('display', showMobileEnd ? 'block' : 'none', 'important');
+          mobileEnd.style.setProperty('pointer-events', showMobileEnd ? 'auto' : 'none', 'important');
+          mobileEnd.setAttribute('aria-hidden', showMobileEnd ? 'false' : 'true');
+        }
+      } catch (e) {
+        console.warn('[setHUDVisible] mobile end btn update failed', e);
+      }
 }
 
 // Ensure HUD reflow after resize/orientation so 'top' placement below toggle stays correct
@@ -2672,6 +2706,16 @@ function showScreen(target) {
     // Not the game screen: ensure HUD and joystick are hidden
     setHUDVisible(false);
     showJoystick(false);
+
+    // Also ensure mobile End Game button is hidden so it never lingers outside game-screen.
+    try {
+      const mobileEnd = document.getElementById('end-game-button-mobile');
+      if (mobileEnd) {
+        mobileEnd.style.setProperty('display', 'none', 'important');
+        mobileEnd.style.setProperty('pointer-events', 'none', 'important');
+        mobileEnd.setAttribute('aria-hidden', 'true');
+      }
+    } catch (e) { /* ignore */ }
   }
 
   console.debug('[showScreen] switched to', targetEl.id, { gameActive: !!window.gameActive, preGameState });
@@ -2791,6 +2835,15 @@ function doLogout() {
   updateStartButtonUI();
   refreshFeedbackButton();
   showScreen(document.getElementById('auth-screen'));
+
+  try {
+    const mobileEnd = document.getElementById('end-game-button-mobile');
+    if (mobileEnd) {
+      mobileEnd.style.setProperty('display', 'none', 'important');
+      mobileEnd.style.setProperty('pointer-events', 'none', 'important');
+      mobileEnd.setAttribute('aria-hidden', 'true');
+    }
+  } catch (e) { /* ignore */ }
 
   try {
     if (preGameInterval) { clearInterval(preGameInterval); preGameInterval = null; }
@@ -3514,6 +3567,39 @@ function initGame(relocateManatee = true) {
     console.warn('[initGame] post-start visibility update failed', e);
   }
 }
+
+try {
+  if (!window.gameActive) {
+    // Do not force-show HUD controls unless the game is active.
+    // This prevents the toggle from being shown outside the game screen.
+    throw new Error('skip: game not active');
+  }
+      const hudToggle = document.getElementById('toggle-hud-button');
+      const mobileEnd = document.getElementById('end-game-button-mobile');
+  
+      if (hudToggle) {
+        hudToggle.style.setProperty('display', 'block', 'important');
+        hudToggle.style.setProperty('pointer-events', 'auto', 'important');
+        hudToggle.style.setProperty('visibility', 'visible', 'important');
+        hudToggle.textContent = hudVisible ? 'Hide HUD' : 'Show HUD';
+        // force reflow so styles take effect immediately on some mobile browsers
+        void hudToggle.offsetHeight;
+      }
+  
+      if (mobileEnd) {
+        if (window.innerWidth <= 700 && window.gameActive && hudVisible) {
+          mobileEnd.style.setProperty('display', 'block', 'important');
+          mobileEnd.style.setProperty('pointer-events', 'auto', 'important');
+          mobileEnd.setAttribute('aria-hidden', 'false');
+        } else {
+          mobileEnd.style.setProperty('display', 'none', 'important');
+          mobileEnd.setAttribute('aria-hidden', 'true');
+        }
+        void mobileEnd.offsetHeight;
+      }
+    } catch (e) {
+      console.warn('[initGame] forcing HUD controls visible failed', e);
+    }
    
   // DEV helper: expose initGame and a safe force-start helper for debugging
 try {
@@ -3611,6 +3697,16 @@ function endGame(timeUp = false) {
   setHUDVisible(false);
   ensureStartButtonIdle();
 
+  // Hide mobile end button defensively so it doesn't remain visible on the popup screen
+  try {
+    const mobileEnd = document.getElementById('end-game-button-mobile');
+    if (mobileEnd) {
+      mobileEnd.style.setProperty('display', 'none', 'important');
+      mobileEnd.style.setProperty('pointer-events', 'none', 'important');
+      mobileEnd.setAttribute('aria-hidden', 'true');
+    }
+  } catch (e) { /* ignore */ }
+
   // Show results and special message if within grace period
   showScreen(completionPopup);
   try { updateEndScreenCredits(); } catch (e) { console.warn('[endGame] updateEndScreenCredits failed', e); }
@@ -3652,6 +3748,16 @@ function showGameEndedResult() {
   stopAnimationLoop();
   setHUDVisible(false);
   showJoystick(false);
+
+  // Ensure mobile end button is hidden when showing the quit popup
+  try {
+    const mobileEnd = document.getElementById('end-game-button-mobile');
+    if (mobileEnd) {
+      mobileEnd.style.setProperty('display', 'none', 'important');
+      mobileEnd.style.setProperty('pointer-events', 'none', 'important');
+      mobileEnd.setAttribute('aria-hidden', 'true');
+    }
+  } catch (e) { /* ignore */ }
 
   showScreen(quitResultPopup);
   try { updateEndScreenCredits(); } catch (e) { console.warn('[showGameEndedResult] updateEndScreenCredits failed', e); }
@@ -4243,14 +4349,6 @@ if (!gameActive && (preGameCountdown > 0 || preGameState === "start")) {
   }
 
   // ----------- END FIXED render() function -----------
-
-  function updateHudToggleVis() {
-    const shouldShowToggle = !!window.gameActive && preGameState === "running";
-    document.querySelectorAll('#game-screen #toggle-hud-button').forEach(btn => {
-      btn.style.setProperty('display', shouldShowToggle ? 'block' : 'none', 'important');
-      btn.style.setProperty('pointer-events', shouldShowToggle ? 'auto' : 'none', 'important');
-    });
-  }
 
   });
 });

@@ -52,16 +52,6 @@
             padding: 4px 12px;
             margin: 0 8px;
         }
-        #toggle-hud-button {
-            position: fixed;
-            top: 16px;
-            right: 16px;
-            z-index: 1100;
-            font-size: 1.1em;
-            padding: 8px 16px;
-            opacity: 0.9;
-            pointer-events: auto;
-        }
         .logo {
             margin-bottom: 18px;
             filter: drop-shadow(0 18px 36px rgba(0,0,0,0.45));
@@ -92,7 +82,6 @@
             .game-info { font-size: 0.9em; flex-direction: column;}
             .manatee-icon svg { width: 45px; height: 32px; }
             .logo svg { width: 70px; height: 70px; }
-            #toggle-hud-button { font-size: 1em; }
         }
         /* Joystick styles */
         /* moved joystick slightly higher and a little inward for better thumb comfort */
@@ -194,7 +183,7 @@
           border-radius: 18px;
           box-sizing: border-box;
 
-          /* ensure content inside the card is top-aligned so it doesn't center vertically */
+          /* ensure content inside the card is top-aligned so it doesn't center vertically */;
           display: flex;
           flex-direction: column;
           justify-content: flex-start;
@@ -575,7 +564,14 @@
           <div id="mobile-hud-treasures" class="mobile-hud-pill">Treasures: <span id="hud-treasures-value">0</span>/<span id="hud-total-value">0</span></div>
           <div id="mobile-hud-score" class="mobile-hud-pill">Score: <span id="hud-score-value">0</span></div>
         </div>
-            <button id="toggle-hud-button" style="display:none;">Hide HUD</button>
+
+        <!-- HUD controls container (top-right) - shows the HUD toggle and a mobile End Game button stacked -->
+        <div id="hud-controls" style="position:fixed; right:12px; top:12px; z-index:1600; display:flex; flex-direction:column; gap:8px; pointer-events:auto;">
+          <button id="toggle-hud-button" style="display:none; pointer-events:auto;">Hide HUD</button>
+          <!-- mobile-only end game button (placed under the toggle) -->
+          <button id="end-game-button-mobile" class="mobile-only" style="display:none; pointer-events:auto;">End Game</button>
+        </div>
+
             <canvas id="game-canvas" width="1800" height="1200"></canvas>
         </div>
         
