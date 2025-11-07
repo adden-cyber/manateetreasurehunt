@@ -84,17 +84,18 @@
             .logo svg { width: 70px; height: 70px; }
         }
         /* Joystick styles */
-        /* moved joystick slightly higher and a little inward for better thumb comfort */
-        #joystick-container {
-            position: fixed;
-            left: 20px;
-            bottom: calc(env(safe-area-inset-bottom, 16px) + 28px);
-            z-index: 1200;
-            width: 110px;
-            height: 110px;
-            pointer-events: auto;
-            display: none;
-        }
+        /* #joystick-container { */
+        /* position: fixed; */
+        /* left: 50%; */                                /* center horizontally */
+        /* transform: translateX(-50%); */               /* center transform */
+        /* bottom: calc(env(safe-area-inset-bottom, 16px) + 28px); */
+        /* z-index: 1200; */
+        /* width: 110px; */
+        /* height: 110px; */
+        /* pointer-events: auto; */
+        /* display: none; */
+        /* }  */
+
         #joystick-base {
             position: absolute;
             width: 110px; height: 110px;

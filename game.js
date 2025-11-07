@@ -2946,14 +2946,6 @@ if (startLogoutBtn) startLogoutBtn.onclick = doLogout;
   if (!( 'ontouchstart' in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) )) return;
   if (!joystickContainer || !joystickBase || !joystickStick) return;
 
-  // Cache original anchored position (string values allowed, e.g. "calc(...)")
-  const joystickOriginal = {
-    left: joystickContainer.style.left || window.getComputedStyle(joystickContainer).left || null,
-    bottom: joystickContainer.style.bottom || window.getComputedStyle(joystickContainer).bottom || null,
-    top: joystickContainer.style.top || window.getComputedStyle(joystickContainer).top || null,
-    right: joystickContainer.style.right || window.getComputedStyle(joystickContainer).right || null
-  };
-
   // Helpers
   const MAX_DIST = 40; // knob radius in px (matches previous maxDist)
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -2974,6 +2966,8 @@ if (startLogoutBtn) startLogoutBtn.onclick = doLogout;
       joystickContainer.style.top = top + 'px';
       joystickContainer.style.bottom = 'auto';
       joystickContainer.style.right = 'auto';
+      // remove transform that centers it horizontally (we're now using absolute left/top)
+      joystickContainer.style.transform = '';
       refreshBase();
     } catch (e) {
       console.warn('[joystick] moveBaseToClientCenter failed', e);
@@ -2982,18 +2976,13 @@ if (startLogoutBtn) startLogoutBtn.onclick = doLogout;
 
   function restoreBaseAnchored() {
     try {
-      // Smoothly animate back to the original anchored position
-      joystickContainer.style.transition = 'left 220ms ease, top 220ms ease, bottom 220ms ease';
-      // If original used bottom/left values, restore them; otherwise fallback to sensible anchor
-      if (joystickOriginal.left !== null) joystickContainer.style.left = joystickOriginal.left;
-      else joystickContainer.style.left = '20px';
-      if (joystickOriginal.bottom !== null) {
-        joystickContainer.style.bottom = joystickOriginal.bottom;
-        joystickContainer.style.top = 'auto';
-      } else {
-        joystickContainer.style.bottom = `calc(env(safe-area-inset-bottom, 16px) + 28px)`;
-        joystickContainer.style.top = 'auto';
-      }
+      // Smoothly animate back to the center-bottom anchored position
+      joystickContainer.style.transition = 'left 220ms ease, top 220ms ease, bottom 220ms ease, transform 220ms ease';
+      // Restore to centered bottom anchor
+      joystickContainer.style.left = '50%';
+      joystickContainer.style.transform = 'translateX(-50%)';
+      joystickContainer.style.bottom = `calc(env(safe-area-inset-bottom, 16px) + 28px)`;
+      joystickContainer.style.top = 'auto';
       // remove transition after it finishes
       setTimeout(() => {
         joystickContainer.style.transition = '';
@@ -3033,6 +3022,44 @@ if (startLogoutBtn) startLogoutBtn.onclick = doLogout;
     refreshBase();
   }, { passive: false });
 
+  // --- NEW: allow touching anywhere on the game screen to spawn/move the joystick base ---
+  // But ignore normal UI touches (buttons, inputs, menus).
+  function isUiTarget(el) {
+    if (!el) return false;
+    try {
+      return !!(el.closest && el.closest('button, input, textarea, select, a, label, .menu-buttons, .auth-form, .mobile-leaderboard-modal, .auth-popup'));
+    } catch (e) {
+      return false;
+    }
+  }
+  window.addEventListener('touchstart', function (ev) {
+    // If joystick is already being touched by the stick/base handlers, let those handle it.
+    if (!ev.touches || ev.touches.length === 0) return;
+    const t = ev.touches[0];
+    if (!t) return;
+
+    // if the touch started on a UI control, don't treat it as a joystick spawn
+    const tg = ev.target;
+    if (isUiTarget(tg)) return;
+
+    // Limit to touches that occur in the game area (canvas or game-screen)
+    if (!(tg.id === 'game-canvas' || tg.closest && tg.closest('#game-screen'))) {
+      // allow fallback: treat body/game area touches as joystick spawns
+      // but avoid interfering with toolbar/HUD touches
+    }
+
+    // Prevent default to avoid accidental page scroll while starting the joystick
+    // Only prevent when the user touches the game area (or body) and not UI controls.
+    ev.preventDefault();
+
+    // Move base to where the user pressed and start joystick
+    moveBaseToClientCenter(t.clientX, t.clientY);
+    joystickActive = true;
+    joystickStick.style.transition = '';
+    joystickStick.style.transform = 'translate(0px, 0px)';
+    refreshBase();
+  }, { passive: false });
+
   // touchmove -> move knob with finger, clamped to MAX_DIST, update joystickX/Y (-1..1)
   window.addEventListener('touchmove', function (ev) {
     if (!joystickActive) return;
@@ -3063,7 +3090,7 @@ if (startLogoutBtn) startLogoutBtn.onclick = doLogout;
     // knob animate back
     joystickStick.style.transition = 'transform 180ms ease';
     joystickStick.style.transform = 'translate(0px, 0px)';
-    // restore base anchored position
+    // restore base anchored position (center-bottom)
     restoreBaseAnchored();
   }
   window.addEventListener('touchend', onTouchEnd, { passive: true });
