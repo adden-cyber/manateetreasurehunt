@@ -1055,6 +1055,11 @@ button:hover, .difficulty-btn:hover {
   .mobile-only { display: inline-block !important; }
 }
 
+.mobile-visible { display: none; }
+@media (max-width: 1000px) {
+  .mobile-visible { display: inline-block !important; }
+}
+
 #mobile-leaderboard-difficulty {
   display: flex;
   gap: 8px;
