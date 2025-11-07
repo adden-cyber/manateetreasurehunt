@@ -286,8 +286,25 @@
           }
           .start-ui h1 { font-size: 28px; }
           .menu-buttons button { padding: 10px 14px; }
-        }
 
+          /* Keep the buttons in a single row when possible on mobile:
+             make each button flexible & prevent wrapping so they stay on one line.
+             This keeps Send Feedback / Leaderboard / History together.
+          */
+          .menu-buttons .buttons-row {
+            flex-wrap: nowrap;
+          }
+          .menu-buttons .buttons-row button {
+            flex: 1 1 34%;
+            min-width: 92px;
+          }
+
+          /* Lower the start UI a bit (less negative translate so it sits lower and shows more background/manatee) */
+          .start-ui {
+            transform: translateY(-2vh);
+            padding-top: 12px;
+          }
+        }
         /* mobile-only helper: hide by default and show only on small screens */
         .mobile-only { display: none; }
         @media (max-width: 1000px) {
@@ -526,7 +543,7 @@
                 <button id="start-logout-btn" type="button">Logout</button>
               </div>
             
-              <!-- Feedback / Leaderboard / History row: all mobile-only buttons inline here -->
+              <!-- Feedback / Leaderboard / History row: all mobile inline buttons -->
               <div class="buttons-row">
                 <button id="send-feedback-btn" type="button">Send Feedback</button>
                 <button id="mobile-leaderboard-btn" class="mobile-visible" type="button">Leaderboard</button>
@@ -850,6 +867,48 @@ function renderMobileLeaderboard(diff) {
     `;
   }).join('');
 }
+
+// --- Wire mobile modal difficulty buttons so Easy/Normal/Hard actually switch ---
+(function wireMobileLeaderboardDifficultyButtons() {
+  try {
+    const container = document.getElementById('mobile-leaderboard-difficulty');
+    if (!container) return;
+    const btns = container.querySelectorAll('.difficulty-btn');
+    if (!btns || btns.length === 0) return;
+
+    btns.forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev && ev.preventDefault && ev.preventDefault();
+        const val = btn.getAttribute('data-value') || 'normal';
+        // Toggle active class inside mobile modal
+        btns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Keep the start-screen difficulty buttons in sync (if present)
+        try {
+          const startBtns = document.querySelectorAll('#difficulty-selector .difficulty-btn');
+          startBtns.forEach(b => {
+            if (b.getAttribute('data-value') === val) b.classList.add('active');
+            else b.classList.remove('active');
+          });
+        } catch (e) { /* ignore */ }
+
+        // Update the global difficulty variable so other parts of the app use it
+        try { window.selectedDifficulty = val; } catch (e) {}
+        try { selectedDifficulty = val; } catch (e) {}
+
+        // Re-render the mobile leaderboard with new difficulty selection (uses cached window.lastLeaderboard)
+        try { renderMobileLeaderboard(val); } catch (e) { console.warn('renderMobileLeaderboard failed', e); }
+
+        // Also attempt to refresh the start/desktop leaderboard if the function exists
+        try { if (typeof loadStartLeaderboard === 'function') loadStartLeaderboard(); } catch (e) {}
+      });
+    });
+  } catch (e) {
+    console.warn('[wireMobileLeaderboardDifficultyButtons] failed', e);
+  }
+})();
+
 });
 </script>
 
