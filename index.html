@@ -514,25 +514,25 @@
 </div>
             <p>Help the manatee find treasures underwater!</p>
             <!-- Add this above your Start Game button -->
- <div class="menu-buttons">
-  <div id="user-credits" style="margin-bottom:4px;">
-    Credits: <span id="credits-value">--</span>
-    <div id="credits-msg" style="margin-top:6px;color:#b00;font-weight:600;font-size:0.95em;"></div>
-  </div>
-
-  <!-- Start / Logout row: history button now placed here so on mobile it appears inline below credits -->
-  <div class="buttons-row">
-    <button id="start-button" type="button">Start Game</button>
-    <button id="start-logout-btn" type="button">Logout</button>
-    <!-- mobile-only history button lives inline with Start + Logout on narrow screens -->
-    <button id="mobile-history-btn" class="mobile-only" type="button">History</button>
-  </div>
-
-  <div class="buttons-row">
-    <button id="send-feedback-btn" type="button">Send Feedback</button>
-    <button id="mobile-leaderboard-btn" class="mobile-only" type="button">Leaderboard</button>
-  </div>
-  </div>
+            <div class="menu-buttons">
+              <div id="user-credits" style="margin-bottom:4px;">
+                Credits: <span id="credits-value">--</span>
+                <div id="credits-msg" style="margin-top:6px;color:#b00;font-weight:600;font-size:0.95em;"></div>
+              </div>
+            
+              <!-- Start / Logout row (keeps Start + Logout together) -->
+              <div class="buttons-row">
+                <button id="start-button" type="button">Start Game</button>
+                <button id="start-logout-btn" type="button">Logout</button>
+              </div>
+            
+              <!-- Feedback / Leaderboard / History row: all mobile-only buttons inline here -->
+              <div class="buttons-row">
+                <button id="send-feedback-btn" type="button">Send Feedback</button>
+                <button id="mobile-leaderboard-btn" class="mobile-only" type="button">Leaderboard</button>
+                <button id="mobile-history-btn" class="mobile-only" type="button">History</button>
+              </div>
+            </div>
 
   <div class="difficulty-selector" id="difficulty-selector">
     <button data-value="easy" class="difficulty-btn">Easy</button>
