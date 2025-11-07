@@ -1110,31 +1110,22 @@ button:hover, .difficulty-btn:hover {
   word-break: break-word;
 }
 
-/* Mobile joystick & start-card adjustments (desktop -> mobile variant) */
-/* default anchor for joystick (kept minimal here) */
-#joystick-container {
-  display: none;
-  pointer-events: none;
-  z-index: 20010; /* very high so it sits above canvas/HUD if needed */
-  left: 20px;
-  bottom: calc(env(safe-area-inset-bottom, 16px) + 28px);
-  width: 110px;
-  height: 110px;
-}
+
 
 /* On mobile-sized viewports, make the joystick container available. */
 @media (max-width: 1000px) {
   /* center the joystick by default: anchored center-bottom */
   #joystick-container {
-    display: none;
-    pointer-events: none;
-    z-index: 20010; /* very high so it sits above canvas/HUD if needed */
+    /* Default anchor: center-bottom. JS will reposition this when the user touches. */
     position: fixed !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
     bottom: calc(env(safe-area-inset-bottom, 16px) + 28px) !important;
     width: 110px !important;
     height: 110px !important;
+    display: none !important;
+    pointer-events: none !important;
+    z-index: 20010 !important; /* sits above canvas/HUD if needed */
   }
 
   /* base/stick interaction safety */
@@ -1148,9 +1139,9 @@ button:hover, .difficulty-btn:hover {
 
 /* Small-screen (very narrow) consolidated adjustments (top-level, not nested) */
 @media (max-width: 420px) {
-  /* joystick smaller and nudged for safe-area */
   #joystick-container {
-    left: 14px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
     bottom: calc(env(safe-area-inset-bottom, 14px) + 24px) !important;
     width: 120px !important;
     height: 120px !important;

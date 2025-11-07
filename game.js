@@ -438,6 +438,8 @@ let isAuthenticated = false;
 // set authentication state helper (keeps UI in sync)
 function setAuthenticated(auth) {
   isAuthenticated = !!auth;
+  try { window.isAuthenticated = isAuthenticated; } catch (e) { /* ignore environments without window */ }
+
   // Refresh UI that depends on auth
   try { updateStartButtonUI(); } catch (e) {}
   try { refreshFeedbackButton(); } catch (e) {}
@@ -445,7 +447,13 @@ function setAuthenticated(auth) {
 
 // createHeaders: pure merge of caller headers. Cookie auth is used via credentials:'include' in fetch.
 function createHeaders(base = {}) {
-  return Object.assign({}, base || {});
+  const headers = Object.assign({}, base || {});
+  // If we ever have a token (fallback mode), include it.
+  // In cookie-first operation userToken is usually null.
+  if (typeof userToken !== 'undefined' && userToken) {
+    try { headers['Authorization'] = 'Bearer ' + userToken; } catch (e) {}
+  }
+  return headers;
 }
 
 // Compute backend base URL (strip trailing /api if present)
@@ -543,12 +551,14 @@ function logBubble(bubble) {
   authFetch(url, {
     method: "POST",
     headers: createHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(payload)
-  }, 4000)
+    body: JSON.stringify(payload),
+    timeoutMs: 4000,
+    credentials: 'include'
+  })
   .then(res => {
-    if (!res.ok) {
+    if (!res || !res.ok) {
       enqueueFailedLog({ url, method: 'POST', body: payload });
-      console.warn('[logBubble] non-ok, queued for retry', res.status);
+      console.warn('[logBubble] non-ok, queued for retry', res && res.status);
     }
   })
   .catch(err => {
@@ -563,12 +573,14 @@ function logMineDeath() {
   authFetch(url, {
     method: "POST",
     headers: createHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(payload)
-  }, 4000)
+    body: JSON.stringify(payload),
+    timeoutMs: 4000,
+    credentials: 'include'
+  })
   .then(res => {
-    if (!res.ok) {
+    if (!res || !res.ok) {
       enqueueFailedLog({ url, method: 'POST', body: payload });
-      console.warn('[logMineDeath] non-ok, queued for retry', res.status);
+      console.warn('[logMineDeath] non-ok, queued for retry', res && res.status);
     }
   })
   .catch(err => {
@@ -590,8 +602,10 @@ function logEndGame(endedEarly = false) {
   authFetch(url, {
     method: "POST",
     headers: createHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(payload)
-  }, 4000)
+    body: JSON.stringify(payload),
+    timeoutMs: 4000,
+    credentials: 'include'
+  })
   .then(async res => {
     if (!res.ok) {
       // try to parse error body for diagnostics (non-blocking)
@@ -1611,6 +1625,10 @@ document.addEventListener('DOMContentLoaded',async () => {
       return false;
     }
   }
+
+  // Add this line (inside DOMContentLoaded, after refreshAuth definition)
+window.refreshAuth = refreshAuth;
+
   // refreshAuth() is defined above in this DOMContentLoaded scope
 try {
   const authOk = await refreshAuth();
@@ -2957,17 +2975,21 @@ if (startLogoutBtn) startLogoutBtn.onclick = doLogout;
   function moveBaseToClientCenter(cx, cy) {
     refreshBase();
     try {
-      const baseW = joystickBase.getBoundingClientRect().width || joystickContainer.offsetWidth || 110;
-      const baseH = joystickBase.getBoundingClientRect().height || joystickContainer.offsetHeight || 110;
+      const baseRectLocal = joystickBase.getBoundingClientRect();
+      const baseW = baseRectLocal.width || joystickContainer.offsetWidth || 110;
+      const baseH = baseRectLocal.height || joystickContainer.offsetHeight || 110;
       const left = Math.round(clamp(cx - baseW/2, 6, window.innerWidth - baseW - 6));
       const top  = Math.round(clamp(cy - baseH/2, 6, window.innerHeight - baseH - 6));
-      // switch to top/left positioning while touch is active
-      joystickContainer.style.left = left + 'px';
-      joystickContainer.style.top = top + 'px';
-      joystickContainer.style.bottom = 'auto';
-      joystickContainer.style.right = 'auto';
-      // remove transform that centers it horizontally (we're now using absolute left/top)
-      joystickContainer.style.transform = '';
+  
+      // Use setProperty with 'important' so we win over any stylesheet !important rules
+      joystickContainer.style.setProperty('position', 'fixed', 'important');
+      joystickContainer.style.setProperty('left', left + 'px', 'important');
+      joystickContainer.style.setProperty('top', top + 'px', 'important');
+      joystickContainer.style.setProperty('bottom', 'auto', 'important');
+      joystickContainer.style.setProperty('right', 'auto', 'important');
+      // remove any centering transform while it's floating
+      joystickContainer.style.setProperty('transform', '', 'important');
+  
       refreshBase();
     } catch (e) {
       console.warn('[joystick] moveBaseToClientCenter failed', e);
@@ -2977,18 +2999,25 @@ if (startLogoutBtn) startLogoutBtn.onclick = doLogout;
   function restoreBaseAnchored() {
     try {
       // Smoothly animate back to the center-bottom anchored position
-      joystickContainer.style.transition = 'left 220ms ease, top 220ms ease, bottom 220ms ease, transform 220ms ease';
-      // Restore to centered bottom anchor
-      joystickContainer.style.left = '50%';
-      joystickContainer.style.transform = 'translateX(-50%)';
-      joystickContainer.style.bottom = `calc(env(safe-area-inset-bottom, 16px) + 28px)`;
-      joystickContainer.style.top = 'auto';
+      joystickContainer.style.setProperty('transition', 'left 220ms ease, top 220ms ease, bottom 220ms ease, transform 220ms ease', 'important');
+  
+      // Restore to centered bottom anchor using !important so stylesheet overrides don't fight this
+      joystickContainer.style.setProperty('left', '50%', 'important');
+      joystickContainer.style.setProperty('transform', 'translateX(-50%)', 'important');
+      joystickContainer.style.setProperty('bottom', 'calc(env(safe-area-inset-bottom, 16px) + 28px)', 'important');
+      joystickContainer.style.setProperty('top', 'auto', 'important');
+      joystickContainer.style.setProperty('right', 'auto', 'important');
+  
       // remove transition after it finishes
       setTimeout(() => {
-        joystickContainer.style.transition = '';
+        try {
+          joystickContainer.style.removeProperty('transition');
+        } catch (e) {}
         refreshBase();
       }, 260);
-    } catch (e) { console.warn('[joystick] restoreBaseAnchored failed', e); }
+    } catch (e) {
+      console.warn('[joystick] restoreBaseAnchored failed', e);
+    }
   }
 
   // Ensure visible & interactive
@@ -3027,7 +3056,12 @@ if (startLogoutBtn) startLogoutBtn.onclick = doLogout;
   function isUiTarget(el) {
     if (!el) return false;
     try {
-      return !!(el.closest && el.closest('button, input, textarea, select, a, label, .menu-buttons, .auth-form, .mobile-leaderboard-modal, .auth-popup'));
+      // Match common interactive UI elements and modal containers by selector:
+      return !!(el.closest && el.closest(
+        'button, input, textarea, select, a, label, .menu-buttons, .auth-form, ' +
+        '#mobile-leaderboard-modal, .mobile-leaderboard-modal, #mobile-history-modal, ' +
+        '.auth-popup, #mobile-history-btn, #hud-controls, #toggle-hud-button, .difficulty-btn'
+      ));
     } catch (e) {
       return false;
     }

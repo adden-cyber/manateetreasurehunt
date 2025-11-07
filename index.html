@@ -644,39 +644,144 @@
   }
 
   // Attach close button event
-  document.getElementById('close-mobile-leaderboard').onclick = hideMobileLeaderboard;
-
-  // Attach difficulty selector events
-  document.querySelectorAll('#mobile-leaderboard-difficulty .difficulty-btn').forEach(btn => {
-    btn.onclick = function() {
-      document.querySelectorAll('#mobile-leaderboard-difficulty .difficulty-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      showMobileLeaderboard(btn.getAttribute('data-value'));
-    };
-  });
-
-  // Attach leaderboard button event
-  document.getElementById('mobile-leaderboard-btn').onclick = async function() {
-  const btn = document.getElementById('mobile-leaderboard-btn');
-  if (!userToken) {
-    alert('Please log in to view the leaderboard!');
-    return;
+  const closeMobileLb = document.getElementById('close-mobile-leaderboard');
+  if (closeMobileLb) {
+    closeMobileLb.addEventListener('click', (ev) => {
+      try { hideMobileLeaderboard(); } catch (e) { console.warn('hideMobileLeaderboard failed', e); }
+    });
   }
-  if (!window.lastLeaderboard) {
+
+  // Helper: check auth state (works whether isAuthenticated is a global binding or stored on window)
+  async function ensureAuthState() {
     try {
-      const res = await authFetch(`${backendBase()}/api/leaderboard`, { timeoutMs: 7000, credentials: 'include' });
-      if (res.ok) {
-        window.lastLeaderboard = await safeParseJson(res) || {};
-      } else {
-        window.lastLeaderboard = {};
+      // 1) If a direct global binding exists and is true, we're authenticated.
+      if (typeof isAuthenticated !== 'undefined' && isAuthenticated === true) {
+        return true;
       }
-    } catch (e) {
-      console.warn('[mobile leaderboard] fetch failed', e);
-      window.lastLeaderboard = {};
+
+      // 2) If the global exists but is false, try to refresh using refreshAuth() if provided
+      //    (game.js may perform an async refreshAuth on load; calling it allows us to wait)
+      if (typeof isAuthenticated !== 'undefined' && isAuthenticated === false) {
+        if (typeof window.refreshAuth === 'function') {
+          try {
+            const refreshed = await window.refreshAuth();
+            if (refreshed) return true;
+          } catch (e) {
+            console.warn('[ensureAuthState] window.refreshAuth failed', e);
+          }
+        }
+        // fallthrough to server check below
+      }
+
+      // 3) Try window-scoped flag if present
+      if (typeof window.isAuthenticated !== 'undefined' && window.isAuthenticated === true) {
+        return true;
+      }
+      if (typeof window.isAuthenticated !== 'undefined' && window.isAuthenticated === false) {
+        // attempt refresh if exposed
+        if (typeof window.refreshAuth === 'function') {
+          try {
+            const refreshed = await window.refreshAuth();
+            if (refreshed) return true;
+          } catch (e) {
+            console.warn('[ensureAuthState] window.refreshAuth failed', e);
+          }
+        }
+      }
+
+      // 4) Final fallback: perform a best-effort server check (/api/me).
+      //    Use authFetch if available (it will include cookies); otherwise use fetch.
+      if (typeof authFetch === 'function') {
+        try {
+          const res = await authFetch(`${backendBase()}/api/me`, { timeoutMs: 4000, credentials: 'include' });
+          if (res && res.ok) {
+            const data = await (res.json().catch(() => ({})));
+            return !!(data && data.email);
+          }
+        } catch (e) {
+          console.warn('[ensureAuthState] authFetch /api/me failed', e);
+        }
+      } else {
+        try {
+          const res = await fetch(`${backendBase()}/api/me`, { credentials: 'include' });
+          if (res && res.ok) {
+            const data = await (res.json().catch(() => ({})));
+            return !!(data && data.email);
+          }
+        } catch (e) {
+          console.warn('[ensureAuthState] fetch /api/me failed', e);
+        }
+      }
+    } catch (err) {
+      console.warn('[ensureAuthState] unexpected error', err);
     }
+    return false;
   }
-  showMobileLeaderboard(window.selectedDifficulty || 'normal');
-};
+
+  const mobileLeaderboardBtn = document.getElementById('mobile-leaderboard-btn');
+  if (mobileLeaderboardBtn) {
+    mobileLeaderboardBtn.addEventListener('click', async function (ev) {
+      ev && ev.preventDefault && ev.preventDefault();
+
+      // Resolve auth state reliably
+      let auth = false;
+      try {
+        auth = await ensureAuthState();
+      } catch (e) {
+        console.warn('[mobileLeaderboard] ensureAuthState failed', e);
+        auth = false;
+      }
+
+      // If not authenticated, show the auth screen (better UX than a plain alert).
+      if (!auth) {
+        try {
+          const authScreen = document.getElementById('auth-screen');
+          if (authScreen && typeof showScreen === 'function') {
+            showScreen(authScreen);
+          } else {
+            alert('Please log in to view the leaderboard!');
+          }
+        } catch (e) {
+          console.warn('show auth screen failed', e);
+          alert('Please log in to view the leaderboard!');
+        }
+        return;
+      }
+
+      // Load leaderboard once (best-effort). Keep window.lastLeaderboard as cache.
+      if (!window.lastLeaderboard) {
+        try {
+          if (typeof authFetch === 'function') {
+            const res = await authFetch(`${backendBase()}/api/leaderboard`, { timeoutMs: 7000, credentials: 'include' });
+            if (res && res.ok) {
+              window.lastLeaderboard = await safeParseJson(res) || {};
+            } else {
+              window.lastLeaderboard = {};
+              console.warn('[mobile leaderboard] fetch returned non-ok', res && res.status);
+            }
+          } else {
+            // fallback: fetch without authFetch
+            const res = await fetch(`${backendBase()}/api/leaderboard`, { credentials: 'include' });
+            if (res && res.ok) {
+              window.lastLeaderboard = await res.json().catch(()=>({}));
+            } else {
+              window.lastLeaderboard = {};
+            }
+          }
+        } catch (e) {
+          console.warn('[mobile leaderboard] fetch failed', e);
+          window.lastLeaderboard = {};
+        }
+      }
+
+      // Finally show the modal using the existing helper.
+      try {
+        showMobileLeaderboard(window.selectedDifficulty || 'normal');
+      } catch (e) {
+        console.warn('showMobileLeaderboard failed', e);
+      }
+    });
+  }
   
 
   // Actual rendering function
