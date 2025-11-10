@@ -3747,7 +3747,7 @@ function initGame(relocateManatee = true) {
   window.gameActive = true;
   window.__gameInitCompleted = true;
 
-  try { playRevealAnimation(); } catch (e) { console.warn('[initGame] playRevealAnimation failed', e); }
+  try { requestAnimationFrame(() => { playRevealAnimation(); }); } catch (e) { console.warn('[initGame] playRevealAnimation failed', e); }
 
   try {
     // Force the HUD to be 'shown' at game start so the toggle and mobile pills are visible.
