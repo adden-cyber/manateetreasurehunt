@@ -634,6 +634,40 @@ button:active {
   100% { transform: scale(1); opacity: 1;}
 }
 
+/* REVEAL: circle-out reveal for countdown -> game transition
+   Insert this immediately after the Countdown Overlay / #countdown-number rules. */
+   #reveal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 130000;               /* above canvas and most UI during the transition */
+    background: #000;              /* match the countdown black */
+    pointer-events: none;          /* don't block any input */
+    clip-path: circle(0% at 50% 50%);
+    opacity: 1;
+  }
+  
+  /* class applied to trigger the reveal */
+  #reveal-overlay.revealing {
+    animation: reveal-circle-out 700ms cubic-bezier(.2,.8,.2,1) forwards;
+  }
+  
+  /* fallback if user prefers reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    #reveal-overlay.revealing { animation-duration: 0ms !important; }
+  }
+  
+  /* large final circle so the overlay disappears */
+  @keyframes reveal-circle-out {
+    from {
+      clip-path: circle(0% at 50% 50%);
+      opacity: 1;
+    }
+    to {
+      clip-path: circle(150% at 50% 50%);
+      opacity: 0;
+    }
+  }
+  
 /* Completion Popup */
 #completion-popup {
   background: rgba(0, 35, 100, 0.43);

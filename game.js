@@ -242,6 +242,42 @@ function updateEndScreenCredits() {
   }
 }
 
+// Insert this immediately after the end of function updateEndScreenCredits()
+function playRevealAnimation(durationMs = 700) {
+  try {
+    const overlay = document.getElementById('reveal-overlay');
+    if (!overlay) return;
+
+    // Respect reduced motion preference
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) {
+      overlay.classList.add('hidden');
+      overlay.classList.remove('revealing');
+      return;
+    }
+
+    overlay.classList.remove('hidden');
+    // Force reflow so adding the class reliably starts animation
+    void overlay.offsetWidth;
+    overlay.classList.add('revealing');
+
+    const cleanup = () => {
+      try {
+        overlay.classList.remove('revealing');
+        overlay.classList.add('hidden');
+      } catch (e) { /* ignore */ }
+    };
+
+    const onEnd = () => { cleanup(); overlay.removeEventListener('animationend', onEnd); };
+    overlay.addEventListener('animationend', onEnd, { once: true });
+
+    // Fallback removal in case animationend doesn't fire
+    setTimeout(() => { cleanup(); }, durationMs + 120);
+  } catch (err) {
+    console.warn('[playRevealAnimation] failed', err);
+  }
+}
+
 const ASSETS = {
   images: {
     mermaid: null,
@@ -3701,6 +3737,8 @@ function initGame(relocateManatee = true) {
   gameActive = true;
   window.gameActive = true;
   window.__gameInitCompleted = true;
+  
+  try { playRevealAnimation(); } catch (e) { console.warn('[initGame] playRevealAnimation failed', e); }
 
   try {
     // Force the HUD to be 'shown' at game start so the toggle and mobile pills are visible.
