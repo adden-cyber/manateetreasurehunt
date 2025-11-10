@@ -643,17 +643,19 @@ button:active {
     background: #000;              /* match the countdown black */
     pointer-events: none;          /* don't block any input */
     clip-path: circle(0% at 50% 50%);
+    -webkit-clip-path: circle(0% at 50% 50%);
     opacity: 1;
   }
   
   /* class applied to trigger the reveal */
   #reveal-overlay.revealing {
     animation: reveal-circle-out 700ms cubic-bezier(.2,.8,.2,1) forwards;
+    -webkit-animation: reveal-circle-out 700ms cubic-bezier(.2,.8,.2,1) forwards;
   }
   
   /* fallback if user prefers reduced motion */
   @media (prefers-reduced-motion: reduce) {
-    #reveal-overlay.revealing { animation-duration: 0ms !important; }
+    #reveal-overlay.revealing { animation-duration: 0ms !important; -webkit-animation-duration: 0ms !important; }
   }
   
   /* large final circle so the overlay disappears */
@@ -668,6 +670,22 @@ button:active {
     }
   }
   
+  /* WebKit-prefixed keyframes for broader Safari support */
+  @-webkit-keyframes reveal-circle-out {
+    from {
+      -webkit-clip-path: circle(0% at 50% 50%);
+      clip-path: circle(0% at 50% 50%);
+      opacity: 1;
+    }
+    to {
+      -webkit-clip-path: circle(150% at 50% 50%);
+      clip-path: circle(150% at 50% 50%);
+      opacity: 0;
+    }
+  }
+  
+  /* When hidden, keep the utility hidden class behavior. Existing .hidden in your CSS will apply. */
+
 /* Completion Popup */
 #completion-popup {
   background: rgba(0, 35, 100, 0.43);
