@@ -242,7 +242,7 @@ function updateEndScreenCredits() {
   }
 }
 
-// Insert this immediately after the end of function updateEndScreenCredits()
+// PATCH: safer playRevealAnimation — wait a frame before starting the animation
 function playRevealAnimation(durationMs = 700) {
   try {
     const overlay = document.getElementById('reveal-overlay');
@@ -256,23 +256,32 @@ function playRevealAnimation(durationMs = 700) {
       return;
     }
 
+    // Make the overlay visible immediately (remove display:none)
     overlay.classList.remove('hidden');
-    // Force reflow so adding the class reliably starts animation
+
+    // Force a reflow so layout reflects the visible overlay
     void overlay.offsetWidth;
-    overlay.classList.add('revealing');
 
-    const cleanup = () => {
-      try {
-        overlay.classList.remove('revealing');
-        overlay.classList.add('hidden');
-      } catch (e) { /* ignore */ }
-    };
+    // Defer adding the 'revealing' class until the next frame so the canvas
+    // has a chance to paint the first game frame underneath.
+    requestAnimationFrame(() => {
+      // Force another reflow (defensive) then start animation
+      void overlay.offsetWidth;
+      overlay.classList.add('revealing');
 
-    const onEnd = () => { cleanup(); overlay.removeEventListener('animationend', onEnd); };
-    overlay.addEventListener('animationend', onEnd, { once: true });
+      const cleanup = () => {
+        try {
+          overlay.classList.remove('revealing');
+          overlay.classList.add('hidden');
+        } catch (e) {}
+      };
 
-    // Fallback removal in case animationend doesn't fire
-    setTimeout(() => { cleanup(); }, durationMs + 120);
+      const onEnd = () => { cleanup(); overlay.removeEventListener('animationend', onEnd); };
+      overlay.addEventListener('animationend', onEnd, { once: true });
+
+      // Fallback removal in case animationend doesn't fire
+      setTimeout(() => { cleanup(); }, durationMs + 120);
+    });
   } catch (err) {
     console.warn('[playRevealAnimation] failed', err);
   }
@@ -3737,7 +3746,7 @@ function initGame(relocateManatee = true) {
   gameActive = true;
   window.gameActive = true;
   window.__gameInitCompleted = true;
-  
+
   try { playRevealAnimation(); } catch (e) { console.warn('[initGame] playRevealAnimation failed', e); }
 
   try {
