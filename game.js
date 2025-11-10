@@ -243,44 +243,66 @@ function updateEndScreenCredits() {
 }
 
 // PATCH: safer playRevealAnimation — wait a frame before starting the animation
+// Updated playRevealAnimation — use double-rAF and debug logs
 function playRevealAnimation(durationMs = 700) {
   try {
     const overlay = document.getElementById('reveal-overlay');
-    if (!overlay) return;
+    if (!overlay) {
+      console.warn('[playRevealAnimation] overlay not found');
+      return;
+    }
 
     // Respect reduced motion preference
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduce) {
-      overlay.classList.add('hidden');
       overlay.classList.remove('revealing');
+      overlay.classList.add('hidden');
+      console.debug('[playRevealAnimation] reduced-motion: skipping animation');
       return;
     }
 
-    // Make the overlay visible immediately (remove display:none)
+    // Make overlay visible (remove any hidden class)
     overlay.classList.remove('hidden');
 
-    // Force a reflow so layout reflects the visible overlay
+    // Force a layout/read to ensure the element is in the computed layout
     void overlay.offsetWidth;
 
-    // Defer adding the 'revealing' class until the next frame so the canvas
-    // has a chance to paint the first game frame underneath.
+    // Debug: mark when we request reveal
+    console.debug('[playRevealAnimation] scheduling reveal @', performance.now());
+
+    // Double-rAF ensures the browser paints at least one frame before we start the animation.
     requestAnimationFrame(() => {
-      // Force another reflow (defensive) then start animation
-      void overlay.offsetWidth;
-      overlay.classList.add('revealing');
-
-      const cleanup = () => {
+      requestAnimationFrame(() => {
         try {
-          overlay.classList.remove('revealing');
-          overlay.classList.add('hidden');
-        } catch (e) {}
-      };
+          // Defensive reflow
+          void overlay.offsetWidth;
 
-      const onEnd = () => { cleanup(); overlay.removeEventListener('animationend', onEnd); };
-      overlay.addEventListener('animationend', onEnd, { once: true });
+          // Add class that triggers CSS animation
+          overlay.classList.add('revealing');
+          console.debug('[playRevealAnimation] started revealing @', performance.now());
 
-      // Fallback removal in case animationend doesn't fire
-      setTimeout(() => { cleanup(); }, durationMs + 120);
+          const cleanup = () => {
+            try {
+              overlay.classList.remove('revealing');
+              overlay.classList.add('hidden');
+              console.debug('[playRevealAnimation] cleaned up overlay @', performance.now());
+            } catch (e) { /* ignore */ }
+          };
+
+          const onEnd = (ev) => {
+            cleanup();
+            overlay.removeEventListener('animationend', onEnd);
+          };
+          overlay.addEventListener('animationend', onEnd, { once: true });
+
+          // Fallback: remove after duration + small slack
+          setTimeout(() => {
+            try { cleanup(); } catch (e) {}
+          }, Math.max(0, durationMs + 150));
+        } catch (innerErr) {
+          console.warn('[playRevealAnimation] inner error', innerErr);
+        }
+      });
     });
   } catch (err) {
     console.warn('[playRevealAnimation] failed', err);
@@ -3764,7 +3786,7 @@ function initGame(relocateManatee = true) {
   } catch (e) {
     console.warn('[initGame] scheduling reveal failed', e);
   }
-  
+
   try {
     // Force the HUD to be 'shown' at game start so the toggle and mobile pills are visible.
     hudVisible = true;
