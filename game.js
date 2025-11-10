@@ -3747,8 +3747,24 @@ function initGame(relocateManatee = true) {
   window.gameActive = true;
   window.__gameInitCompleted = true;
 
-  try { requestAnimationFrame(() => { playRevealAnimation(); }); } catch (e) { console.warn('[initGame] playRevealAnimation failed', e); }
-
+  try {
+    // Schedule the reveal after the next frame has been painted.
+    // requestAnimationFrame -> allows gameLoop to run and queue drawing,
+    // setTimeout runs after the paint, so the reveal will uncover the rendered game.
+    requestAnimationFrame(() => {
+      // Small timeout (0-40ms) to ensure the browser finishes the composite.
+      setTimeout(() => {
+        try {
+          playRevealAnimation();
+        } catch (e) {
+          console.warn('[initGame] playRevealAnimation failed', e);
+        }
+      }, 24); // 24ms is a conservative single-frame delay; 0 would often work but is less reliable on some browsers.
+    });
+  } catch (e) {
+    console.warn('[initGame] scheduling reveal failed', e);
+  }
+  
   try {
     // Force the HUD to be 'shown' at game start so the toggle and mobile pills are visible.
     hudVisible = true;
