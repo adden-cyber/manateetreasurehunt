@@ -243,7 +243,6 @@ function updateEndScreenCredits() {
 }
 
 // PATCH: safer playRevealAnimation — wait a frame before starting the animation
-// Updated playRevealAnimation — use double-rAF and debug logs
 function playRevealAnimation(durationMs = 700) {
   try {
     const overlay = document.getElementById('reveal-overlay');
@@ -261,47 +260,74 @@ function playRevealAnimation(durationMs = 700) {
       return;
     }
 
-    // Make overlay visible (remove any hidden class)
-    overlay.classList.remove('hidden');
+    // Ensure starting state: visible, opaque, zero-size circle
+    try {
+      overlay.classList.remove('revealing');
+      overlay.classList.remove('hidden');
+    } catch (e) { /* ignore */ }
 
-    // Force a layout/read to ensure the element is in the computed layout
+    // Explicitly set the initial clip-path & opacity to a consistent starting state.
+    // This avoids cases where a stale inline style or class causes the animation to not run.
+    try {
+      overlay.style.setProperty('clip-path', 'circle(0% at 50% 50%)', 'important');
+      overlay.style.setProperty('-webkit-clip-path', 'circle(0% at 50% 50%)', 'important');
+      overlay.style.setProperty('opacity', '1', 'important');
+      // Should not block input but prevent pointer capture during the reveal
+      overlay.style.setProperty('pointer-events', 'none', 'important');
+      // Make sure overlay is actually visible to the compositor
+      overlay.style.removeProperty('display');
+    } catch (e) { /* ignore style setting failures */ }
+
+    // Force a layout/read so the browser acknowledges the style changes.
+    // This reduces the chance the animation is skipped due to style batching.
     void overlay.offsetWidth;
 
-    // Debug: mark when we request reveal
+    // Debug logging
     console.debug('[playRevealAnimation] scheduling reveal @', performance.now());
 
-    // Double-rAF ensures the browser paints at least one frame before we start the animation.
+    // Use double-rAF plus a very short timeout to ensure the browser has painted at least one frame
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        try {
-          // Defensive reflow
-          void overlay.offsetWidth;
+        // extra tiny delay to let the composite settle on slower devices/browsers
+        setTimeout(() => {
+          try {
+            // Defensive reflow
+            void overlay.offsetWidth;
 
-          // Add class that triggers CSS animation
-          overlay.classList.add('revealing');
-          console.debug('[playRevealAnimation] started revealing @', performance.now());
+            // Start the animation by adding the class that runs the CSS keyframes.
+            overlay.classList.add('revealing');
+            console.debug('[playRevealAnimation] started revealing @', performance.now());
 
-          const cleanup = () => {
-            try {
-              overlay.classList.remove('revealing');
-              overlay.classList.add('hidden');
-              console.debug('[playRevealAnimation] cleaned up overlay @', performance.now());
-            } catch (e) { /* ignore */ }
-          };
+            // Clean-up function
+            const cleanup = () => {
+              try {
+                overlay.classList.remove('revealing');
+                overlay.classList.add('hidden');
+                // restore inline clip-path/opacity to avoid leaving residue
+                overlay.style.removeProperty('clip-path');
+                overlay.style.removeProperty('-webkit-clip-path');
+                overlay.style.removeProperty('opacity');
+                overlay.style.removeProperty('pointer-events');
+                console.debug('[playRevealAnimation] cleaned up overlay @', performance.now());
+              } catch (e) { /* ignore */ }
+            };
 
-          const onEnd = (ev) => {
-            cleanup();
-            overlay.removeEventListener('animationend', onEnd);
-          };
-          overlay.addEventListener('animationend', onEnd, { once: true });
+            // Remove reveal class and hide overlay when the animation completes
+            const onEnd = (ev) => {
+              cleanup();
+              overlay.removeEventListener('animationend', onEnd);
+            };
+            overlay.addEventListener('animationend', onEnd, { once: true });
 
-          // Fallback: remove after duration + small slack
-          setTimeout(() => {
-            try { cleanup(); } catch (e) {}
-          }, Math.max(0, durationMs + 150));
-        } catch (innerErr) {
-          console.warn('[playRevealAnimation] inner error', innerErr);
-        }
+            // Safety fallback: force cleanup after duration + slack
+            setTimeout(() => {
+              try { cleanup(); } catch (e) {}
+            }, Math.max(0, durationMs + 200));
+
+          } catch (innerErr) {
+            console.warn('[playRevealAnimation] inner error', innerErr);
+          }
+        }, 20); // small slack ensures paint on many mobile browsers
       });
     });
   } catch (err) {
