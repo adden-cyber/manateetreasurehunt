@@ -955,11 +955,15 @@ body::after {
   border-radius: 50%;
   opacity: 0.6;
   filter: blur(1px);
-  z-index: 1;                              /* <-- changed from 0 to 1 so bubbles are above body::before */
+  z-index: 3;                              /* above body::after (z-index:1) and body::before, but below UI panels */
   pointer-events: none;
   animation: bubbleUp var(--duration, 14s) linear infinite;
   will-change: transform, opacity;
   transform: translateY(0) translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  /* ensure animation is running by default (helps some browsers) */
+  animation-play-state: running;
 }
 
 /* Pause class for JS to toggle without touching media queries */
