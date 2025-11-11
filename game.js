@@ -242,24 +242,109 @@ function updateEndScreenCredits() {
   }
 }
 
-// PATCH: safer playRevealAnimation — wait a frame before starting the animation
-// Replace existing playRevealAnimation with this implementation
+// Replace existing playRevealAnimation with this robust canvas-first implementation.
+// Uses #transitionCanvas (if present) to draw a black full-screen and cut a circular hole
+// (destination-out) while animating radius. Falls back to animating #reveal-overlay clip-path.
+// origin: { x: <CSS px>, y: <CSS px> } (CSS pixels relative to viewport). durationMs in ms.
 function playRevealAnimation(durationMs = 700, origin = null) {
   try {
-    const overlay = document.getElementById('reveal-overlay');
-    if (!overlay) return;
-
     // Respect prefers-reduced-motion
     try {
       const mq = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
       if (mq && mq.matches) {
-        overlay.classList.add('hidden');
-        overlay.setAttribute('aria-hidden', 'true');
+        const overlay = document.getElementById('reveal-overlay');
+        if (overlay) {
+          overlay.classList.add('hidden');
+          overlay.setAttribute('aria-hidden', 'true');
+        }
         return;
       }
     } catch (e) { /* ignore */ }
 
-    // Ensure overlay base visuals are black and above everything
+    // Normalize duration
+    durationMs = Math.max(40, Number(durationMs) || 700);
+
+    // Resolve origin in CSS pixels (default: center of viewport)
+    let ox = Math.round(window.innerWidth / 2);
+    let oy = Math.round(window.innerHeight / 2);
+    if (origin && typeof origin.x === 'number' && typeof origin.y === 'number') {
+      ox = Math.round(origin.x);
+      oy = Math.round(origin.y);
+    }
+
+    // Try canvas-based reveal using transitionCanvas (preferred)
+    const tCanvas = document.getElementById('transitionCanvas');
+    const tCtx = tCanvas && tCanvas.getContext ? tCanvas.getContext('2d') : null;
+
+    if (tCtx && tCanvas) {
+      // Prepare high-DPR backing store
+      const dpr = window.devicePixelRatio || 1;
+      tCanvas.width = Math.ceil(window.innerWidth * dpr);
+      tCanvas.height = Math.ceil(window.innerHeight * dpr);
+      tCanvas.style.width = `${window.innerWidth}px`;
+      tCanvas.style.height = `${window.innerHeight}px`;
+      tCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      // Make sure canvas is visible and above everything (JS may set z-index elsewhere)
+      tCanvas.style.display = 'block';
+      tCanvas.style.pointerEvents = 'none';
+
+      // Pre-fill with solid black (nearly-opaque) so the hole reveals the game underneath cleanly
+      tCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      tCtx.save();
+      tCtx.fillStyle = 'rgba(0,0,0,0.98)';
+      tCtx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+      tCtx.restore();
+
+      const maxRadius = Math.hypot(Math.max(ox, window.innerWidth - ox), Math.max(oy, window.innerHeight - oy)) * 1.15;
+      const start = performance.now();
+      const ease = (t) => 1 - Math.pow(1 - t, 3); // easeOutCubic
+
+      let rafId = null;
+      function frame(now) {
+        const raw = Math.min(1, Math.max(0, (now - start) / durationMs));
+        const t = ease(raw);
+        const radius = Math.max(0.1, t * maxRadius);
+
+        // Clear then paint black full-screen then cut out the circle (destination-out)
+        tCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+        tCtx.save();
+        tCtx.fillStyle = 'rgba(0,0,0,0.98)';
+        tCtx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+        // cut out hole
+        tCtx.globalCompositeOperation = 'destination-out';
+        tCtx.beginPath();
+        tCtx.arc(ox, oy, radius, 0, Math.PI * 2);
+        tCtx.fill();
+        tCtx.globalCompositeOperation = 'source-over';
+        tCtx.restore();
+
+        if (raw < 1) {
+          rafId = requestAnimationFrame(frame);
+        } else {
+          // finished: clear canvas and hide it
+          try {
+            tCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+            tCanvas.style.display = 'none';
+          } catch (e) { /* ignore */ }
+          if (rafId) rafId = null;
+        }
+      }
+      rafId = requestAnimationFrame(frame);
+      return;
+    }
+
+    // Fallback: animate a dedicated overlay element's clip-path (works broadly).
+    // Ensure overlay exists and has a black background.
+    const overlay = document.getElementById('reveal-overlay');
+    if (!overlay) {
+      // Nothing to animate; exit
+      return;
+    }
+
+    // Prepare overlay: visible, black, above everything
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
     overlay.style.setProperty('display', 'block', 'important');
@@ -270,78 +355,51 @@ function playRevealAnimation(durationMs = 700, origin = null) {
     overlay.style.setProperty('height', '100%', 'important');
     overlay.style.setProperty('pointer-events', 'none', 'important');
     overlay.style.setProperty('z-index', '2147483647', 'important');
-
-    // Make sure the overlay is pure black so the expanding reveal looks correct.
-    // Use backgroundColor rather than shorthand background so we don't unexpectedly override other properties.
     overlay.style.setProperty('background-color', '#000', 'important');
-    overlay.style.setProperty('mix-blend-mode', 'normal', 'important');
     overlay.style.removeProperty('clip-path');
     overlay.style.removeProperty('-webkit-clip-path');
 
-    // Compute origin in CSS pixels. Default to viewport center.
-    let ox = Math.round(window.innerWidth / 2);
-    let oy = Math.round(window.innerHeight / 2);
-    if (origin && typeof origin.x === 'number' && typeof origin.y === 'number') {
-      // origin is expected in CSS px coordinates relative to viewport
-      ox = Math.round(origin.x);
-      oy = Math.round(origin.y);
-    }
-
-    // compute a radius large enough to cover the viewport from the origin
-    const dx = Math.max(ox, window.innerWidth - ox);
-    const dy = Math.max(oy, window.innerHeight - oy);
-    const maxRadius = Math.ceil(Math.hypot(dx, dy));
-
-    // Setup initial clip-path (small circle at origin)
     const startClip = `circle(0px at ${ox}px ${oy}px)`;
-    const endClip = `circle(${maxRadius}px at ${ox}px ${oy}px)`;
+    const endClip = `circle(${Math.ceil(Math.hypot(Math.max(ox, window.innerWidth-ox), Math.max(oy, window.innerHeight-oy))) }px at ${ox}px ${oy}px)`;
 
-    // Helper to cleanup after animation
-    let finished = false;
-    function cleanup() {
-      if (finished) return;
-      finished = true;
-      try {
-        // Hide overlay and restore attribute
-        overlay.classList.add('hidden');
-        overlay.setAttribute('aria-hidden', 'true');
-        // Remove inline clip-path/transition so stylesheet rules control future appearances
-        overlay.style.removeProperty('clip-path');
-        overlay.style.removeProperty('-webkit-clip-path');
-        overlay.style.removeProperty('transition');
-        overlay.style.removeProperty('opacity');
-        // keep background-color (black) in case other code re-shows it intentionally
-      } catch (e) {
-        // swallow
-      }
-    }
-
-    // Use WA API (preferred) to animate clip-path and opacity
+    // Try Web Animations API on overlay (preferred fallback)
     try {
       if (typeof overlay.animate === 'function') {
         const anim = overlay.animate(
           [
-            { clipPath: startClip, opacity: 1, offset: 0 },
-            { clipPath: endClip, opacity: 0, offset: 1 }
+            { clipPath: startClip, '-webkit-clip-path': startClip, opacity: 1 },
+            { clipPath: endClip, '-webkit-clip-path': endClip, opacity: 0 }
           ],
-          { duration: Math.max(40, durationMs), easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }
+          { duration: durationMs, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }
         );
-
         anim.onfinish = () => {
           try {
-            // give a tiny fade to 0 so the final frame is clean on some engines
-            const fade = overlay.animate([{ opacity: 0 }, { opacity: 0 }], { duration: 120 });
-            fade.onfinish = cleanup;
-          } catch (e) { cleanup(); }
+            overlay.classList.add('hidden');
+            overlay.setAttribute('aria-hidden', 'true');
+            overlay.style.removeProperty('clip-path');
+            overlay.style.removeProperty('-webkit-clip-path');
+            overlay.style.removeProperty('opacity');
+          } catch (e) {}
         };
-        anim.oncancel = cleanup;
-
-        // safety timeout in case events don't fire
-        setTimeout(cleanup, durationMs + 600);
+        anim.oncancel = () => {
+          try {
+            overlay.classList.add('hidden');
+            overlay.setAttribute('aria-hidden', 'true');
+          } catch (e) {}
+        };
+        // Safety timeout
+        setTimeout(() => {
+          try {
+            overlay.classList.add('hidden');
+            overlay.setAttribute('aria-hidden', 'true');
+            overlay.style.removeProperty('clip-path');
+            overlay.style.removeProperty('-webkit-clip-path');
+          } catch (e) {}
+        }, durationMs + 600);
         return;
       }
     } catch (e) {
-      // fall through to CSS fallback
+      // fall through to CSS-transition fallback
     }
 
     // CSS transition fallback
@@ -349,27 +407,35 @@ function playRevealAnimation(durationMs = 700, origin = null) {
       overlay.style.setProperty('-webkit-clip-path', startClip, 'important');
       overlay.style.setProperty('clip-path', startClip, 'important');
       overlay.style.setProperty('opacity', '1', 'important');
-      // Force layout so the initial state is applied
+      // Force style to apply
       void overlay.offsetWidth;
-
-      // Apply transition properties
       overlay.style.setProperty('transition', `clip-path ${durationMs}ms cubic-bezier(.2,.8,.2,1), opacity ${Math.max(120, Math.floor(durationMs/6))}ms linear`, 'important');
 
-      // Start the transition on the next frame
       requestAnimationFrame(() => {
         try {
           overlay.style.setProperty('-webkit-clip-path', endClip, 'important');
           overlay.style.setProperty('clip-path', endClip, 'important');
           overlay.style.setProperty('opacity', '0', 'important');
-        } catch (e) { /* ignore */ }
+        } catch (e) {}
       });
 
-      // Cleanup after duration + small buffer
-      setTimeout(cleanup, durationMs + 260);
+      // cleanup after
+      setTimeout(() => {
+        try {
+          overlay.classList.add('hidden');
+          overlay.setAttribute('aria-hidden', 'true');
+          overlay.style.removeProperty('clip-path');
+          overlay.style.removeProperty('-webkit-clip-path');
+          overlay.style.removeProperty('transition');
+          overlay.style.removeProperty('opacity');
+        } catch (e) {}
+      }, durationMs + 260);
       return;
     } catch (e) {
-      // last-resort: hide the overlay after a tick
-      setTimeout(cleanup, 60);
+      // last resort: hide overlay after a tick
+      setTimeout(() => {
+        try { overlay.classList.add('hidden'); overlay.setAttribute('aria-hidden','true'); } catch (e) {}
+      }, 60);
     }
   } catch (err) {
     console.warn('[playRevealAnimation] unexpected error', err);
