@@ -243,78 +243,85 @@ function updateEndScreenCredits() {
 }
 
 // PATCH: safer playRevealAnimation — wait a frame before starting the animation
-/// Replace existing playRevealAnimation with this robust transform-based implementation
-function playRevealAnimation(durationMs = 700) {
+// Replace existing playRevealAnimation with this implementation
+function playRevealAnimation(durationMs = 700, origin = null) {
   try {
     const overlay = document.getElementById('reveal-overlay');
-    if (!overlay) {
-      console.warn('[playRevealAnimation] overlay not found');
-      return;
-    }
+    if (!overlay) return;
 
-    // Respect reduced-motion
+    // Respect prefers-reduced-motion
     try {
       const mq = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
       if (mq && mq.matches) {
-        try { overlay.classList.add('hidden'); overlay.setAttribute('aria-hidden','true'); } catch(e){}
-        console.debug('[playRevealAnimation] reduced-motion: skipping animation');
+        overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden', 'true');
         return;
       }
     } catch (e) { /* ignore */ }
 
-    // Ensure overlay visible and accessible
-    try {
-      overlay.classList.remove('hidden');
-      overlay.setAttribute('aria-hidden','false');
-      overlay.style.setProperty('display', 'block', 'important');
-      overlay.style.setProperty('position', 'fixed', 'important');
-      overlay.style.setProperty('left', '0', 'important');
-      overlay.style.setProperty('top', '0', 'important');
-      overlay.style.setProperty('width', '100%', 'important');
-      overlay.style.setProperty('height', '100%', 'important');
-      overlay.style.setProperty('pointer-events', 'none', 'important');
-      overlay.style.setProperty('z-index', '2147483647', 'important');
-      // remove any clip-path so it won't interfere
-      overlay.style.removeProperty('clip-path');
-      overlay.style.removeProperty('-webkit-clip-path');
-    } catch (e) {
-      console.warn('[playRevealAnimation] could not set overlay inline styles', e);
+    // Make overlay visible and clear any clip-path that might hide it
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.style.setProperty('display', 'block', 'important');
+    overlay.style.setProperty('position', 'fixed', 'important');
+    overlay.style.setProperty('left', '0', 'important');
+    overlay.style.setProperty('top', '0', 'important');
+    overlay.style.setProperty('width', '100%', 'important');
+    overlay.style.setProperty('height', '100%', 'important');
+    overlay.style.setProperty('pointer-events', 'none', 'important');
+    overlay.style.setProperty('z-index', '2147483647', 'important');
+    overlay.style.removeProperty('clip-path');
+    overlay.style.removeProperty('-webkit-clip-path');
+
+    // compute origin position (CSS pixels). If origin not provided, center of viewport.
+    let left = '50%';
+    let top = '50%';
+    if (origin && typeof origin.x === 'number' && typeof origin.y === 'number') {
+      left = origin.x + 'px';
+      top = origin.y + 'px';
     }
 
-    // Create expanding circle element
-    const circleId = '__reveal_circle';
-    let circle = document.getElementById(circleId);
-    if (circle) circle.remove();
+    // create the hole element (transparent circle, large box-shadow to dim rest of page)
+    const id = '__reveal_transform_hole';
+    let hole = document.getElementById(id);
+    if (hole) hole.remove();
 
-    circle = document.createElement('div');
-    circle.id = circleId;
-    Object.assign(circle.style, {
+    hole = document.createElement('div');
+    hole.id = id;
+    const baseSize = 140;
+    Object.assign(hole.style, {
       position: 'fixed',
-      left: '50%',
-      top: '50%',
-      width: '160px',
-      height: '160px',
-      transform: 'translate(-50%,-50%) scale(0)',
+      left,
+      top,
+      width: baseSize + 'px',
+      height: baseSize + 'px',
+      marginLeft: -(baseSize / 2) + 'px',
+      marginTop: -(baseSize / 2) + 'px',
       borderRadius: '50%',
-      background: '#fff',
+      background: 'transparent',
       pointerEvents: 'none',
       zIndex: String(2147483648),
-      boxShadow: '0 0 60px rgba(255,255,255,0.25)'
+      boxShadow: '0 0 0 9999px rgba(0,0,0,0.88)',
+      transformOrigin: '50% 50%',
+      transform: 'scale(0)',
+      opacity: '1',
+      willChange: 'transform, opacity'
     });
 
-    document.body.appendChild(circle);
+    document.body.appendChild(hole);
+    // force layout
+    void hole.offsetWidth;
 
-    // Force layout / paint before animating
-    void circle.offsetWidth;
-
-    // Use Web Animations API for transform (very reliable)
     let finished = false;
     function cleanup() {
       if (finished) return;
       finished = true;
-      try { circle.remove(); } catch (e) {}
-      try { overlay.classList.add('hidden'); overlay.setAttribute('aria-hidden','true'); } catch (e) {}
-      // remove transitional inline styles we added
+      try { hole.remove(); } catch (e) {}
+      try {
+        overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden', 'true');
+      } catch (e) {}
+      // remove inline overlay styles we temporarily added so CSS can control it afterwards
       try {
         overlay.style.removeProperty('display');
         overlay.style.removeProperty('position');
@@ -325,41 +332,40 @@ function playRevealAnimation(durationMs = 700) {
         overlay.style.removeProperty('pointer-events');
         overlay.style.removeProperty('z-index');
       } catch (e) {}
-      console.debug('[playRevealAnimation] cleaned up');
     }
 
-    if (typeof circle.animate === 'function') {
-      const scaleTo = Math.max(window.innerWidth, window.innerHeight) / 160 * 1.6; // ensure full cover
-      const anim = circle.animate([
-        { transform: 'translate(-50%,-50%) scale(0)', opacity: 1 },
-        { transform: `translate(-50%,-50%) scale(${scaleTo})`, opacity: 1 }
-      ], { duration: Math.max(50, durationMs), easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
-
-      anim.onfinish = () => {
-        // short fade then cleanup
-        try {
-          circle.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180 }).onfinish = cleanup;
-        } catch (e) { cleanup(); }
-      };
-      anim.oncancel = cleanup;
-
-      // safety fallback
-      setTimeout(cleanup, durationMs + 600);
-      return;
-    }
-
-    // fallback: CSS transition
+    // animate using WA API, fallback to CSS transition
     try {
-      circle.style.transition = `transform ${durationMs}ms ease-in-out, opacity 200ms linear`;
-      requestAnimationFrame(() => {
-        circle.style.transform = `translate(-50%,-50%) scale(48)`;
-      });
-      setTimeout(() => {
-        try { circle.style.opacity = '0'; } catch (e){}
-      }, durationMs - 90);
+      if (typeof hole.animate === 'function') {
+        const scaleTo = Math.max(window.innerWidth, window.innerHeight) / baseSize * 1.6;
+        const anim = hole.animate(
+          [
+            { transform: 'scale(0)', opacity: 1 },
+            { transform: `scale(${scaleTo})`, opacity: 1 }
+          ],
+          { duration: Math.max(50, durationMs), easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }
+        );
+        anim.onfinish = () => {
+          try {
+            hole.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160 }).onfinish = cleanup;
+          } catch (e) { cleanup(); }
+        };
+        anim.oncancel = cleanup;
+        // safety timeout in case events don't fire
+        setTimeout(cleanup, durationMs + 600);
+        return;
+      }
+    } catch (e) {
+      // fall through to CSS fallback
+    }
+
+    // CSS transition fallback
+    try {
+      hole.style.transition = `transform ${durationMs}ms ease-in-out, opacity 200ms linear`;
+      requestAnimationFrame(() => { hole.style.transform = 'scale(48)'; });
+      setTimeout(() => { hole.style.opacity = '0'; }, durationMs - 80);
       setTimeout(cleanup, durationMs + 260);
     } catch (e) {
-      console.warn('[playRevealAnimation] fallback animation failed', e);
       setTimeout(cleanup, 60);
     }
   } catch (err) {
@@ -3827,23 +3833,37 @@ function initGame(relocateManatee = true) {
   window.gameActive = true;
   window.__gameInitCompleted = true;
 
-  try {
-    // Schedule the reveal after the next frame has been painted.
-    // requestAnimationFrame -> allows gameLoop to run and queue drawing,
-    // setTimeout runs after the paint, so the reveal will uncover the rendered game.
-    requestAnimationFrame(() => {
-      // Small timeout (0-40ms) to ensure the browser finishes the composite.
-      setTimeout(() => {
+  // schedule the reveal to originate from the manatee center in CSS pixels
+try {
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      try {
+        // compute manatee center in CSS pixels relative to the viewport
+        let origin = null;
         try {
-          playRevealAnimation();
-        } catch (e) {
-          console.warn('[initGame] playRevealAnimation failed', e);
-        }
-      }, 24); // 24ms is a conservative single-frame delay; 0 would often work but is less reliable on some browsers.
-    });
-  } catch (e) {
-    console.warn('[initGame] scheduling reveal failed', e);
-  }
+          const canvasEl = document.getElementById('game-canvas');
+          const dpr = window.devicePixelRatio || 1;
+          if (canvasEl && typeof manatee !== 'undefined') {
+            const canvasClientW = canvasEl.clientWidth || window.innerWidth;
+            const viewportCssW = VIEWPORT_WIDTH || canvasClientW;
+            const scale = canvasClientW / Math.max(1, viewportCssW);
+            const sx = (manatee.x + (manatee.width || 0) / 2 - (cameraX || 0)) * scale;
+            const sy = (manatee.y + (manatee.height || 0) / 2 - (cameraY || 0)) * scale;
+            origin = { x: Math.round(sx), y: Math.round(sy) };
+          }
+        } catch (e) { origin = null; }
+
+        // call reveal with origin if available
+        if (origin) playRevealAnimation(700, origin);
+        else playRevealAnimation(700);
+      } catch (e) {
+        console.warn('[initGame] playRevealAnimation failed', e);
+      }
+    }, 24);
+  });
+} catch (e) {
+  console.warn('[initGame] scheduling reveal failed', e);
+}
 
   try {
     // Force the HUD to be 'shown' at game start so the toggle and mobile pills are visible.
