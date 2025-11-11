@@ -1674,4 +1674,44 @@ button:hover, .difficulty-btn:hover {
 #hud-controls button {
   pointer-events: auto;
 }
+
+#transitionCanvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2147483648; /* above almost everything */
+  pointer-events: none;
+  display: none;       /* JS toggles this while animating */
+  background: transparent;
+  will-change: transform, opacity;
+}
+
+/* Reveal overlay (CSS fallback) — keep it explicitly black and non-interactive.
+   Use .hidden to hide it; JS will remove inline clip-path after animation so CSS can control future uses. */
+#reveal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647; /* just under transitionCanvas if both exist */
+  background-color: #000 !important; /* authoritative black base */
+  pointer-events: none !important;
+  display: block;
+  clip-path: circle(0% at 50% 50%);
+  -webkit-clip-path: circle(0% at 50% 50%);
+  opacity: 1;
+  transition: none !important; /* JS will apply transition when needed */
+}
+
+#reveal-overlay.hidden {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Slight help for older WebKit: ensure the overlay has no accidental mixing/mask modes */
+#reveal-overlay,
+#transitionCanvas {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
 /* End of styles.css */

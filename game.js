@@ -1189,6 +1189,45 @@ VIEWPORT_HEIGHT = Math.min(Math.round(cssHeight * zoom), GAME_HEIGHT);
   }
 }
 
+// ----------- ADD THIS TOP-LEVEL HELPER (place it near other helpers, e.g. after updateViewportSize) -----------
+function computeRevealOriginForManatee() {
+  try {
+    const canvasEl = document.getElementById('game-canvas');
+    if (!canvasEl) return null;
+
+    // canvas client rect is in CSS pixels
+    const rect = canvasEl.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+
+    // world-space center of the manatee
+    if (typeof manatee === 'undefined') return null;
+    const worldX = manatee.x + (manatee.width || 0) / 2;
+    const worldY = manatee.y + (manatee.height || 0) / 2;
+
+    // VIEWPORT_WIDTH / VIEWPORT_HEIGHT are the world-pixel extents visible (set by updateViewportSize)
+    const worldViewW = VIEWPORT_WIDTH || (canvasEl.width / (window.devicePixelRatio || 1));
+    const worldViewH = VIEWPORT_HEIGHT || (canvasEl.height / (window.devicePixelRatio || 1));
+
+    // defensive guards
+    const cssScaleX = rect.width / Math.max(1, worldViewW);
+    const cssScaleY = rect.height / Math.max(1, worldViewH);
+
+    // offset of the manatee inside the current visible world (world pixels)
+    const offsetX = worldX - (cameraX || 0);
+    const offsetY = worldY - (cameraY || 0);
+
+    // convert to CSS pixels and offset by canvas position
+    const cssX = rect.left + offsetX * cssScaleX;
+    const cssY = rect.top  + offsetY * cssScaleY;
+
+    return { x: Math.round(cssX), y: Math.round(cssY) };
+  } catch (e) {
+    console.warn('[computeRevealOriginForManatee] failed', e);
+    return null;
+  }
+}
+// ----------- END HELPER -------------------------------------------------------------------------------
+
 function isColliding(rect1, rect2) {
   return (
     rect1.x < rect2.x + rect2.width &&
@@ -3903,36 +3942,27 @@ function initGame(relocateManatee = true) {
   window.__gameInitCompleted = true;
 
   // schedule the reveal to originate from the manatee center in CSS pixels
-try {
-  requestAnimationFrame(() => {
-    setTimeout(() => {
-      try {
-        // compute manatee center in CSS pixels relative to the viewport
-        let origin = null;
+  try {
+    // schedule the reveal to originate from the manatee center in CSS pixels
+    requestAnimationFrame(() => {
+      setTimeout(() => {
         try {
-          const canvasEl = document.getElementById('game-canvas');
-          const dpr = window.devicePixelRatio || 1;
-          if (canvasEl && typeof manatee !== 'undefined') {
-            const canvasClientW = canvasEl.clientWidth || window.innerWidth;
-            const viewportCssW = VIEWPORT_WIDTH || canvasClientW;
-            const scale = canvasClientW / Math.max(1, viewportCssW);
-            const sx = (manatee.x + (manatee.width || 0) / 2 - (cameraX || 0)) * scale;
-            const sy = (manatee.y + (manatee.height || 0) / 2 - (cameraY || 0)) * scale;
-            origin = { x: Math.round(sx), y: Math.round(sy) };
+          const origin = computeRevealOriginForManatee();
+          if (origin && typeof origin.x === 'number' && typeof origin.y === 'number') {
+            playRevealAnimation(700, origin);
+          } else {
+            // fallback: center of viewport
+            playRevealAnimation(700, null);
           }
-        } catch (e) { origin = null; }
-
-        // call reveal with origin if available
-        if (origin) playRevealAnimation(700, origin);
-        else playRevealAnimation(700);
-      } catch (e) {
-        console.warn('[initGame] playRevealAnimation failed', e);
-      }
-    }, 24);
-  });
-} catch (e) {
-  console.warn('[initGame] scheduling reveal failed', e);
-}
+        } catch (e) {
+          console.warn('[initGame] playRevealAnimation failed', e);
+          try { playRevealAnimation(700); } catch (ee) {}
+        }
+      }, 48);
+    });
+  } catch (e) {
+    console.warn('[initGame] scheduling reveal failed', e);
+  }
 
   try {
     // Force the HUD to be 'shown' at game start so the toggle and mobile pills are visible.
