@@ -895,5 +895,55 @@ function renderMobileLeaderboard(diff) {
 
 <div id="reveal-overlay" aria-hidden="true" class="hidden" style="pointer-events:none;"></div>
 <!-- End PATCH -->
+<script>
+  (function() {
+    function rand(min, max) { return Math.random() * (max - min) + min; }
+  
+    function normalizeBubbles() {
+      const bubbles = document.querySelectorAll('.bubble');
+      bubbles.forEach((b, i) => {
+        // Seed sensible CSS variables if they aren't provided inline
+        if (!b.style.getPropertyValue('--x')) {
+          // distribute across the width
+          b.style.setProperty('--x', (10 + i * 22 + rand(-6,6)) + 'vw');
+        }
+        if (!b.style.getPropertyValue('--size')) {
+          b.style.setProperty('--size', (32 + Math.round(rand(0,56))) + 'px');
+        }
+        if (!b.style.getPropertyValue('--duration')) {
+          // randomize duration so the motion is organic
+          b.style.setProperty('--duration', (10 + Math.round(rand(0,20))) + 's');
+        }
+  
+        // Force-restart the CSS animation (works around browsers that sometimes don't auto-start)
+        b.classList.remove('paused');
+        b.style.animation = 'none';
+        // a double rAF guarantees the style is applied then the animation is reflowed
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          b.style.removeProperty('animation');
+        }));
+      });
+    }
+  
+    // Pause bubble animations when the tab is hidden to save CPU/battery
+    document.addEventListener('visibilitychange', () => {
+      const bubbles = document.querySelectorAll('.bubble');
+      if (document.hidden) {
+        bubbles.forEach(b => b.classList.add('paused'));
+      } else {
+        bubbles.forEach(b => b.classList.remove('paused'));
+        // ensure they restart cleanly
+        normalizeBubbles();
+      }
+    });
+  
+    // Run once on load
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', normalizeBubbles, { once: true });
+    } else {
+      normalizeBubbles();
+    }
+  })();
+  </script>
 </body>
 </html>
