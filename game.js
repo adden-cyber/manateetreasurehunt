@@ -243,7 +243,7 @@ function updateEndScreenCredits() {
 }
 
 // PATCH: safer playRevealAnimation — wait a frame before starting the animation
-// Replacement: playRevealAnimation using Web Animations API with robust fallbacks
+/// Replace existing playRevealAnimation with this robust transform-based implementation
 function playRevealAnimation(durationMs = 700) {
   try {
     const overlay = document.getElementById('reveal-overlay');
@@ -252,143 +252,116 @@ function playRevealAnimation(durationMs = 700) {
       return;
     }
 
-    // Respect reduced motion
+    // Respect reduced-motion
     try {
       const mq = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
       if (mq && mq.matches) {
-        overlay.classList.remove('revealing');
-        overlay.classList.add('hidden');
+        try { overlay.classList.add('hidden'); overlay.setAttribute('aria-hidden','true'); } catch(e){}
         console.debug('[playRevealAnimation] reduced-motion: skipping animation');
         return;
       }
-    } catch (e) { /* ignore media query errors */ }
+    } catch (e) { /* ignore */ }
 
-    // Defensive initial state: ensure overlay is visible and on top
+    // Ensure overlay visible and accessible
     try {
       overlay.classList.remove('hidden');
-      overlay.classList.remove('revealing');
-    } catch (e) {}
-    try {
+      overlay.setAttribute('aria-hidden','false');
       overlay.style.setProperty('display', 'block', 'important');
+      overlay.style.setProperty('position', 'fixed', 'important');
+      overlay.style.setProperty('left', '0', 'important');
+      overlay.style.setProperty('top', '0', 'important');
+      overlay.style.setProperty('width', '100%', 'important');
+      overlay.style.setProperty('height', '100%', 'important');
       overlay.style.setProperty('pointer-events', 'none', 'important');
-      overlay.style.setProperty('z-index', '2147483647', 'important'); // very high z
-      overlay.style.setProperty('opacity', '1', 'important');
-      overlay.style.setProperty('clip-path', 'circle(0% at 50% 50%)', 'important');
-      overlay.style.setProperty('-webkit-clip-path', 'circle(0% at 50% 50%)', 'important');
-      // ensure it's paintable
-      void overlay.offsetWidth;
+      overlay.style.setProperty('z-index', '2147483647', 'important');
+      // remove any clip-path so it won't interfere
+      overlay.style.removeProperty('clip-path');
+      overlay.style.removeProperty('-webkit-clip-path');
     } catch (e) {
-      console.warn('[playRevealAnimation] could not set inline styles:', e);
+      console.warn('[playRevealAnimation] could not set overlay inline styles', e);
     }
 
-    console.debug('[playRevealAnimation] starting (duration)', durationMs, 'at', performance.now());
+    // Create expanding circle element
+    const circleId = '__reveal_circle';
+    let circle = document.getElementById(circleId);
+    if (circle) circle.remove();
 
-    // Wait two frames so the browser paints the starting state
-    requestAnimationFrame(() => {
-      requestAnimationFrame(async () => {
-        // tiny timeout to help some mobile browsers settle composition
-        await new Promise(r => setTimeout(r, 18));
-
-        // Cleanup helper
-        let finished = false;
-        function cleanup() {
-          if (finished) return;
-          finished = true;
-          try {
-            overlay.classList.remove('revealing');
-            overlay.classList.add('hidden');
-          } catch (e) {}
-          try {
-            overlay.style.removeProperty('clip-path');
-            overlay.style.removeProperty('-webkit-clip-path');
-            overlay.style.removeProperty('opacity');
-            overlay.style.removeProperty('display');
-            overlay.style.removeProperty('pointer-events');
-            overlay.style.removeProperty('z-index');
-            overlay.style.removeProperty('transition');
-          } catch (e) {}
-          console.debug('[playRevealAnimation] cleaned up at', performance.now());
-        }
-
-        // Try Web Animations API on clip-path (modern browsers)
-        try {
-          if (typeof overlay.animate === 'function') {
-            const keyframes = [
-              { clipPath: 'circle(0% at 50% 50%)', webkitClipPath: 'circle(0% at 50% 50%)', offset: 0 },
-              { clipPath: 'circle(150% at 50% 50%)', webkitClipPath: 'circle(150% at 50% 50%)', offset: 1 }
-            ];
-            const anim = overlay.animate(keyframes, {
-              duration: Math.max(50, durationMs),
-              easing: 'cubic-bezier(.2,.8,.2,1)',
-              fill: 'forwards'
-            });
-            overlay.classList.add('revealing');
-            console.debug('[playRevealAnimation] WA started', anim);
-
-            // If animationstart and animationend events are available, they will fire;
-            // use animation.onfinish as primary completion hook.
-            anim.onfinish = () => {
-              console.debug('[playRevealAnimation] WA finished');
-              cleanup();
-            };
-            anim.oncancel = () => {
-              console.debug('[playRevealAnimation] WA cancelled');
-              cleanup();
-            };
-
-            // Safety fallback timeout if onfinish doesn't fire
-            setTimeout(() => cleanup(), durationMs + 400);
-            return;
-          }
-        } catch (e) {
-          console.warn('[playRevealAnimation] WA attempt failed', e);
-          // fall through to CSS transition fallback
-        }
-
-        // CSS transition fallback (for older browsers)
-        try {
-          // ensure transition is not present
-          overlay.style.removeProperty('transition');
-          // Force the start state then transition to final state
-          overlay.style.setProperty('clip-path', 'circle(0% at 50% 50%)', 'important');
-          overlay.style.setProperty('-webkit-clip-path', 'circle(0% at 50% 50%)', 'important');
-          // small reflow
-          void overlay.offsetWidth;
-          // apply transition
-          overlay.style.setProperty('transition', `clip-path ${durationMs}ms ease-in-out, -webkit-clip-path ${durationMs}ms ease-in-out, opacity ${Math.min(200, durationMs)}ms linear`);
-          overlay.classList.add('revealing');
-
-          // trigger the end state on next frame
-          requestAnimationFrame(() => {
-            try {
-              overlay.style.setProperty('clip-path', 'circle(150% at 50% 50%)', 'important');
-              overlay.style.setProperty('-webkit-clip-path', 'circle(150% at 50% 50%)', 'important');
-            } catch (e) {}
-          });
-
-          // Listen for transitionend (may fire multiple times; guard with finished flag)
-          const onTransitionEnd = (ev) => {
-            // We only care about clip-path or opacity transitions
-            if (ev.propertyName && !/clip-path|-webkit-clip-path|opacity/.test(ev.propertyName)) return;
-            overlay.removeEventListener('transitionend', onTransitionEnd);
-            console.debug('[playRevealAnimation] transitionend', ev.propertyName);
-            cleanup();
-          };
-          overlay.addEventListener('transitionend', onTransitionEnd);
-
-          // Safety timeout
-          setTimeout(() => cleanup(), durationMs + 500);
-          return;
-        } catch (e) {
-          console.warn('[playRevealAnimation] CSS transition fallback failed', e);
-          // final fallback below
-        }
-
-        // Final fallback: no animation capability — just hide overlay after small delay
-        console.debug('[playRevealAnimation] no animation available; hiding overlay after delay');
-        setTimeout(() => cleanup(), 60);
-      });
+    circle = document.createElement('div');
+    circle.id = circleId;
+    Object.assign(circle.style, {
+      position: 'fixed',
+      left: '50%',
+      top: '50%',
+      width: '160px',
+      height: '160px',
+      transform: 'translate(-50%,-50%) scale(0)',
+      borderRadius: '50%',
+      background: '#fff',
+      pointerEvents: 'none',
+      zIndex: String(2147483648),
+      boxShadow: '0 0 60px rgba(255,255,255,0.25)'
     });
+
+    document.body.appendChild(circle);
+
+    // Force layout / paint before animating
+    void circle.offsetWidth;
+
+    // Use Web Animations API for transform (very reliable)
+    let finished = false;
+    function cleanup() {
+      if (finished) return;
+      finished = true;
+      try { circle.remove(); } catch (e) {}
+      try { overlay.classList.add('hidden'); overlay.setAttribute('aria-hidden','true'); } catch (e) {}
+      // remove transitional inline styles we added
+      try {
+        overlay.style.removeProperty('display');
+        overlay.style.removeProperty('position');
+        overlay.style.removeProperty('left');
+        overlay.style.removeProperty('top');
+        overlay.style.removeProperty('width');
+        overlay.style.removeProperty('height');
+        overlay.style.removeProperty('pointer-events');
+        overlay.style.removeProperty('z-index');
+      } catch (e) {}
+      console.debug('[playRevealAnimation] cleaned up');
+    }
+
+    if (typeof circle.animate === 'function') {
+      const scaleTo = Math.max(window.innerWidth, window.innerHeight) / 160 * 1.6; // ensure full cover
+      const anim = circle.animate([
+        { transform: 'translate(-50%,-50%) scale(0)', opacity: 1 },
+        { transform: `translate(-50%,-50%) scale(${scaleTo})`, opacity: 1 }
+      ], { duration: Math.max(50, durationMs), easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
+
+      anim.onfinish = () => {
+        // short fade then cleanup
+        try {
+          circle.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180 }).onfinish = cleanup;
+        } catch (e) { cleanup(); }
+      };
+      anim.oncancel = cleanup;
+
+      // safety fallback
+      setTimeout(cleanup, durationMs + 600);
+      return;
+    }
+
+    // fallback: CSS transition
+    try {
+      circle.style.transition = `transform ${durationMs}ms ease-in-out, opacity 200ms linear`;
+      requestAnimationFrame(() => {
+        circle.style.transform = `translate(-50%,-50%) scale(48)`;
+      });
+      setTimeout(() => {
+        try { circle.style.opacity = '0'; } catch (e){}
+      }, durationMs - 90);
+      setTimeout(cleanup, durationMs + 260);
+    } catch (e) {
+      console.warn('[playRevealAnimation] fallback animation failed', e);
+      setTimeout(cleanup, 60);
+    }
   } catch (err) {
     console.warn('[playRevealAnimation] unexpected error', err);
   }
