@@ -259,7 +259,7 @@ function playRevealAnimation(durationMs = 700, origin = null) {
       }
     } catch (e) { /* ignore */ }
 
-    // Make overlay visible and clear any clip-path that might hide it
+    // Ensure overlay base visuals are black and above everything
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
     overlay.style.setProperty('display', 'block', 'important');
@@ -270,87 +270,72 @@ function playRevealAnimation(durationMs = 700, origin = null) {
     overlay.style.setProperty('height', '100%', 'important');
     overlay.style.setProperty('pointer-events', 'none', 'important');
     overlay.style.setProperty('z-index', '2147483647', 'important');
+
+    // Make sure the overlay is pure black so the expanding reveal looks correct.
+    // Use backgroundColor rather than shorthand background so we don't unexpectedly override other properties.
+    overlay.style.setProperty('background-color', '#000', 'important');
+    overlay.style.setProperty('mix-blend-mode', 'normal', 'important');
     overlay.style.removeProperty('clip-path');
     overlay.style.removeProperty('-webkit-clip-path');
 
-    // compute origin position (CSS pixels). If origin not provided, center of viewport.
-    let left = '50%';
-    let top = '50%';
+    // Compute origin in CSS pixels. Default to viewport center.
+    let ox = Math.round(window.innerWidth / 2);
+    let oy = Math.round(window.innerHeight / 2);
     if (origin && typeof origin.x === 'number' && typeof origin.y === 'number') {
-      left = origin.x + 'px';
-      top = origin.y + 'px';
+      // origin is expected in CSS px coordinates relative to viewport
+      ox = Math.round(origin.x);
+      oy = Math.round(origin.y);
     }
 
-    // create the hole element (transparent circle, large box-shadow to dim rest of page)
-    const id = '__reveal_transform_hole';
-    let hole = document.getElementById(id);
-    if (hole) hole.remove();
+    // compute a radius large enough to cover the viewport from the origin
+    const dx = Math.max(ox, window.innerWidth - ox);
+    const dy = Math.max(oy, window.innerHeight - oy);
+    const maxRadius = Math.ceil(Math.hypot(dx, dy));
 
-    hole = document.createElement('div');
-    hole.id = id;
-    const baseSize = 140;
-    Object.assign(hole.style, {
-      position: 'fixed',
-      left,
-      top,
-      width: baseSize + 'px',
-      height: baseSize + 'px',
-      marginLeft: -(baseSize / 2) + 'px',
-      marginTop: -(baseSize / 2) + 'px',
-      borderRadius: '50%',
-      background: 'transparent',
-      pointerEvents: 'none',
-      zIndex: String(2147483648),
-      boxShadow: '0 0 0 9999px rgba(0,0,0,0.88)',
-      transformOrigin: '50% 50%',
-      transform: 'scale(0)',
-      opacity: '1',
-      willChange: 'transform, opacity'
-    });
+    // Setup initial clip-path (small circle at origin)
+    const startClip = `circle(0px at ${ox}px ${oy}px)`;
+    const endClip = `circle(${maxRadius}px at ${ox}px ${oy}px)`;
 
-    document.body.appendChild(hole);
-    // force layout
-    void hole.offsetWidth;
-
+    // Helper to cleanup after animation
     let finished = false;
     function cleanup() {
       if (finished) return;
       finished = true;
-      try { hole.remove(); } catch (e) {}
       try {
+        // Hide overlay and restore attribute
         overlay.classList.add('hidden');
         overlay.setAttribute('aria-hidden', 'true');
-      } catch (e) {}
-      // remove inline overlay styles we temporarily added so CSS can control it afterwards
-      try {
-        overlay.style.removeProperty('display');
-        overlay.style.removeProperty('position');
-        overlay.style.removeProperty('left');
-        overlay.style.removeProperty('top');
-        overlay.style.removeProperty('width');
-        overlay.style.removeProperty('height');
-        overlay.style.removeProperty('pointer-events');
-        overlay.style.removeProperty('z-index');
-      } catch (e) {}
+        // Remove inline clip-path/transition so stylesheet rules control future appearances
+        overlay.style.removeProperty('clip-path');
+        overlay.style.removeProperty('-webkit-clip-path');
+        overlay.style.removeProperty('transition');
+        overlay.style.removeProperty('opacity');
+        // keep background-color (black) in case other code re-shows it intentionally
+      } catch (e) {
+        // swallow
+      }
     }
 
-    // animate using WA API, fallback to CSS transition
+    // Use WA API (preferred) to animate clip-path and opacity
     try {
-      if (typeof hole.animate === 'function') {
-        const scaleTo = Math.max(window.innerWidth, window.innerHeight) / baseSize * 1.6;
-        const anim = hole.animate(
+      if (typeof overlay.animate === 'function') {
+        const anim = overlay.animate(
           [
-            { transform: 'scale(0)', opacity: 1 },
-            { transform: `scale(${scaleTo})`, opacity: 1 }
+            { clipPath: startClip, opacity: 1, offset: 0 },
+            { clipPath: endClip, opacity: 0, offset: 1 }
           ],
-          { duration: Math.max(50, durationMs), easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }
+          { duration: Math.max(40, durationMs), easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }
         );
+
         anim.onfinish = () => {
           try {
-            hole.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160 }).onfinish = cleanup;
+            // give a tiny fade to 0 so the final frame is clean on some engines
+            const fade = overlay.animate([{ opacity: 0 }, { opacity: 0 }], { duration: 120 });
+            fade.onfinish = cleanup;
           } catch (e) { cleanup(); }
         };
         anim.oncancel = cleanup;
+
         // safety timeout in case events don't fire
         setTimeout(cleanup, durationMs + 600);
         return;
@@ -361,11 +346,29 @@ function playRevealAnimation(durationMs = 700, origin = null) {
 
     // CSS transition fallback
     try {
-      hole.style.transition = `transform ${durationMs}ms ease-in-out, opacity 200ms linear`;
-      requestAnimationFrame(() => { hole.style.transform = 'scale(48)'; });
-      setTimeout(() => { hole.style.opacity = '0'; }, durationMs - 80);
+      overlay.style.setProperty('-webkit-clip-path', startClip, 'important');
+      overlay.style.setProperty('clip-path', startClip, 'important');
+      overlay.style.setProperty('opacity', '1', 'important');
+      // Force layout so the initial state is applied
+      void overlay.offsetWidth;
+
+      // Apply transition properties
+      overlay.style.setProperty('transition', `clip-path ${durationMs}ms cubic-bezier(.2,.8,.2,1), opacity ${Math.max(120, Math.floor(durationMs/6))}ms linear`, 'important');
+
+      // Start the transition on the next frame
+      requestAnimationFrame(() => {
+        try {
+          overlay.style.setProperty('-webkit-clip-path', endClip, 'important');
+          overlay.style.setProperty('clip-path', endClip, 'important');
+          overlay.style.setProperty('opacity', '0', 'important');
+        } catch (e) { /* ignore */ }
+      });
+
+      // Cleanup after duration + small buffer
       setTimeout(cleanup, durationMs + 260);
+      return;
     } catch (e) {
+      // last-resort: hide the overlay after a tick
       setTimeout(cleanup, 60);
     }
   } catch (err) {
