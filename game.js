@@ -243,6 +243,7 @@ function updateEndScreenCredits() {
 }
 
 // PATCH: safer playRevealAnimation — wait a frame before starting the animation
+// Replacement: playRevealAnimation using Web Animations API with robust fallbacks
 function playRevealAnimation(durationMs = 700) {
   try {
     const overlay = document.getElementById('reveal-overlay');
@@ -251,87 +252,145 @@ function playRevealAnimation(durationMs = 700) {
       return;
     }
 
-    // Respect reduced motion preference
-    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) {
-      overlay.classList.remove('revealing');
-      overlay.classList.add('hidden');
-      console.debug('[playRevealAnimation] reduced-motion: skipping animation');
-      return;
-    }
-
-    // Ensure starting state: visible, opaque, zero-size circle
+    // Respect reduced motion
     try {
-      overlay.classList.remove('revealing');
+      const mq = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+      if (mq && mq.matches) {
+        overlay.classList.remove('revealing');
+        overlay.classList.add('hidden');
+        console.debug('[playRevealAnimation] reduced-motion: skipping animation');
+        return;
+      }
+    } catch (e) { /* ignore media query errors */ }
+
+    // Defensive initial state: ensure overlay is visible and on top
+    try {
       overlay.classList.remove('hidden');
-    } catch (e) { /* ignore */ }
-
-    // Explicitly set the initial clip-path & opacity to a consistent starting state.
-    // This avoids cases where a stale inline style or class causes the animation to not run.
+      overlay.classList.remove('revealing');
+    } catch (e) {}
     try {
+      overlay.style.setProperty('display', 'block', 'important');
+      overlay.style.setProperty('pointer-events', 'none', 'important');
+      overlay.style.setProperty('z-index', '2147483647', 'important'); // very high z
+      overlay.style.setProperty('opacity', '1', 'important');
       overlay.style.setProperty('clip-path', 'circle(0% at 50% 50%)', 'important');
       overlay.style.setProperty('-webkit-clip-path', 'circle(0% at 50% 50%)', 'important');
-      overlay.style.setProperty('opacity', '1', 'important');
-      // Should not block input but prevent pointer capture during the reveal
-      overlay.style.setProperty('pointer-events', 'none', 'important');
-      // Make sure overlay is actually visible to the compositor
-      overlay.style.removeProperty('display');
-    } catch (e) { /* ignore style setting failures */ }
+      // ensure it's paintable
+      void overlay.offsetWidth;
+    } catch (e) {
+      console.warn('[playRevealAnimation] could not set inline styles:', e);
+    }
 
-    // Force a layout/read so the browser acknowledges the style changes.
-    // This reduces the chance the animation is skipped due to style batching.
-    void overlay.offsetWidth;
+    console.debug('[playRevealAnimation] starting (duration)', durationMs, 'at', performance.now());
 
-    // Debug logging
-    console.debug('[playRevealAnimation] scheduling reveal @', performance.now());
-
-    // Use double-rAF plus a very short timeout to ensure the browser has painted at least one frame
+    // Wait two frames so the browser paints the starting state
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        // extra tiny delay to let the composite settle on slower devices/browsers
-        setTimeout(() => {
+      requestAnimationFrame(async () => {
+        // tiny timeout to help some mobile browsers settle composition
+        await new Promise(r => setTimeout(r, 18));
+
+        // Cleanup helper
+        let finished = false;
+        function cleanup() {
+          if (finished) return;
+          finished = true;
           try {
-            // Defensive reflow
-            void overlay.offsetWidth;
+            overlay.classList.remove('revealing');
+            overlay.classList.add('hidden');
+          } catch (e) {}
+          try {
+            overlay.style.removeProperty('clip-path');
+            overlay.style.removeProperty('-webkit-clip-path');
+            overlay.style.removeProperty('opacity');
+            overlay.style.removeProperty('display');
+            overlay.style.removeProperty('pointer-events');
+            overlay.style.removeProperty('z-index');
+            overlay.style.removeProperty('transition');
+          } catch (e) {}
+          console.debug('[playRevealAnimation] cleaned up at', performance.now());
+        }
 
-            // Start the animation by adding the class that runs the CSS keyframes.
+        // Try Web Animations API on clip-path (modern browsers)
+        try {
+          if (typeof overlay.animate === 'function') {
+            const keyframes = [
+              { clipPath: 'circle(0% at 50% 50%)', webkitClipPath: 'circle(0% at 50% 50%)', offset: 0 },
+              { clipPath: 'circle(150% at 50% 50%)', webkitClipPath: 'circle(150% at 50% 50%)', offset: 1 }
+            ];
+            const anim = overlay.animate(keyframes, {
+              duration: Math.max(50, durationMs),
+              easing: 'cubic-bezier(.2,.8,.2,1)',
+              fill: 'forwards'
+            });
             overlay.classList.add('revealing');
-            console.debug('[playRevealAnimation] started revealing @', performance.now());
+            console.debug('[playRevealAnimation] WA started', anim);
 
-            // Clean-up function
-            const cleanup = () => {
-              try {
-                overlay.classList.remove('revealing');
-                overlay.classList.add('hidden');
-                // restore inline clip-path/opacity to avoid leaving residue
-                overlay.style.removeProperty('clip-path');
-                overlay.style.removeProperty('-webkit-clip-path');
-                overlay.style.removeProperty('opacity');
-                overlay.style.removeProperty('pointer-events');
-                console.debug('[playRevealAnimation] cleaned up overlay @', performance.now());
-              } catch (e) { /* ignore */ }
-            };
-
-            // Remove reveal class and hide overlay when the animation completes
-            const onEnd = (ev) => {
+            // If animationstart and animationend events are available, they will fire;
+            // use animation.onfinish as primary completion hook.
+            anim.onfinish = () => {
+              console.debug('[playRevealAnimation] WA finished');
               cleanup();
-              overlay.removeEventListener('animationend', onEnd);
             };
-            overlay.addEventListener('animationend', onEnd, { once: true });
+            anim.oncancel = () => {
+              console.debug('[playRevealAnimation] WA cancelled');
+              cleanup();
+            };
 
-            // Safety fallback: force cleanup after duration + slack
-            setTimeout(() => {
-              try { cleanup(); } catch (e) {}
-            }, Math.max(0, durationMs + 200));
-
-          } catch (innerErr) {
-            console.warn('[playRevealAnimation] inner error', innerErr);
+            // Safety fallback timeout if onfinish doesn't fire
+            setTimeout(() => cleanup(), durationMs + 400);
+            return;
           }
-        }, 20); // small slack ensures paint on many mobile browsers
+        } catch (e) {
+          console.warn('[playRevealAnimation] WA attempt failed', e);
+          // fall through to CSS transition fallback
+        }
+
+        // CSS transition fallback (for older browsers)
+        try {
+          // ensure transition is not present
+          overlay.style.removeProperty('transition');
+          // Force the start state then transition to final state
+          overlay.style.setProperty('clip-path', 'circle(0% at 50% 50%)', 'important');
+          overlay.style.setProperty('-webkit-clip-path', 'circle(0% at 50% 50%)', 'important');
+          // small reflow
+          void overlay.offsetWidth;
+          // apply transition
+          overlay.style.setProperty('transition', `clip-path ${durationMs}ms ease-in-out, -webkit-clip-path ${durationMs}ms ease-in-out, opacity ${Math.min(200, durationMs)}ms linear`);
+          overlay.classList.add('revealing');
+
+          // trigger the end state on next frame
+          requestAnimationFrame(() => {
+            try {
+              overlay.style.setProperty('clip-path', 'circle(150% at 50% 50%)', 'important');
+              overlay.style.setProperty('-webkit-clip-path', 'circle(150% at 50% 50%)', 'important');
+            } catch (e) {}
+          });
+
+          // Listen for transitionend (may fire multiple times; guard with finished flag)
+          const onTransitionEnd = (ev) => {
+            // We only care about clip-path or opacity transitions
+            if (ev.propertyName && !/clip-path|-webkit-clip-path|opacity/.test(ev.propertyName)) return;
+            overlay.removeEventListener('transitionend', onTransitionEnd);
+            console.debug('[playRevealAnimation] transitionend', ev.propertyName);
+            cleanup();
+          };
+          overlay.addEventListener('transitionend', onTransitionEnd);
+
+          // Safety timeout
+          setTimeout(() => cleanup(), durationMs + 500);
+          return;
+        } catch (e) {
+          console.warn('[playRevealAnimation] CSS transition fallback failed', e);
+          // final fallback below
+        }
+
+        // Final fallback: no animation capability — just hide overlay after small delay
+        console.debug('[playRevealAnimation] no animation available; hiding overlay after delay');
+        setTimeout(() => cleanup(), 60);
       });
     });
   } catch (err) {
-    console.warn('[playRevealAnimation] failed', err);
+    console.warn('[playRevealAnimation] unexpected error', err);
   }
 }
 
