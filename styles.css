@@ -1571,6 +1571,62 @@ button:hover, .difficulty-btn:hover {
     }
 }
 
+/* change the stray selector to the ID selector */
+#buff-debuff-panel {
+  position: fixed;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 12995;
+  pointer-events: none;
+  min-width: 140px;
+  max-width: 220px;
+  align-items: flex-start;
+}
+
+/* Each item visual */
+#buff-debuff-panel .buff-item {
+  background: linear-gradient(180deg, rgba(6,30,50,0.95), rgba(6,30,50,0.86));
+  color: #e6fbff;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: 0.96rem;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.42);
+  border: 1px solid rgba(255,255,255,0.03);
+  opacity: 0.98;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Slight color differences */
+#buff-debuff-panel #buff-seaweed { background: linear-gradient(180deg,#003f2f,#005a41); color:#bfffd8; }
+#buff-debuff-panel #debuff-slow   { background: linear-gradient(180deg,#4a1a1a,#6b2a2a); color:#ffd8d8; }
+
+/* Hide text when no content (keeps layout tidy) */
+#buff-debuff-panel[aria-hidden="true"] { display: none !important; }
+
+/* Mobile placement: move to right middle */
+@media (max-width: 700px) {
+  #buff-debuff-panel {
+    left: auto;
+    right: 12px;              /* mobile: middle-right */
+    top: 50%;
+    transform: translateY(-50%);
+    align-items: flex-end;
+    min-width: 120px;
+  }
+  #buff-debuff-panel .buff-item { text-align: right; }
+}
+
+/* Respect reduce-motion preference (no motion used, but keep this guard) */
+@media (prefers-reduced-motion: reduce) {
+  #buff-debuff-panel { transition: none !important; }
+}
+
 /* Pre-game hide helper for mobile: JS adds body.pre-game during countdown */
 @media (max-width: 700px) {
   body.pre-game .mobile-only,

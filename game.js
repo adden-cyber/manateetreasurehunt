@@ -2404,6 +2404,21 @@ if (mobileEndBtn) {
     quitTreasuresCollected = document.getElementById('quit-treasures-collected');
     timerValue = document.getElementById('timer-value');
     timeRemaining = document.getElementById('time-remaining');
+    let buffPanelEl = null;
+    let seaweedBuffEl = null;
+    let slowDebuffEl = null;
+
+    try {
+      buffPanelEl = document.getElementById('buff-debuff-panel');
+      seaweedBuffEl = document.getElementById('buff-seaweed');
+      slowDebuffEl = document.getElementById('debuff-slow');
+      if (buffPanelEl) {
+        buffPanelEl.setAttribute('aria-hidden', 'true');
+        buffPanelEl.style.display = 'none';
+      }
+    } catch (e) {
+      console.warn('[buffUI] init failed', e);
+    }
     completionTitle = document.getElementById('completion-title');
     completionMessage = document.getElementById('completion-message');
     quitTitle = document.getElementById('quit-title');
@@ -4106,6 +4121,44 @@ function updateMobileHudValues() {
   }
 }
 
+function updateBuffDebuffUI() {
+  try {
+    if (!buffPanelEl || !seaweedBuffEl || !slowDebuffEl) return;
+
+    // Convert frame-based timers (60fps) -> seconds for display
+    const seaweedSec = (activeSeaweedBoost && typeof seaweedBoostTimer === 'number' && seaweedBoostTimer > 0)
+      ? Math.ceil(seaweedBoostTimer / 60) : 0;
+    const slowSec = (typeof fakeTreasureSlowTimer === 'number' && fakeTreasureSlowTimer > 0)
+      ? Math.ceil(fakeTreasureSlowTimer / 60) : 0;
+
+    if (seaweedSec > 0) {
+      seaweedBuffEl.textContent = `Seaweed Boost: ${seaweedSec}s`;
+      seaweedBuffEl.setAttribute('aria-hidden', 'false');
+    } else {
+      seaweedBuffEl.textContent = '';
+      seaweedBuffEl.setAttribute('aria-hidden', 'true');
+    }
+
+    if (slowSec > 0) {
+      slowDebuffEl.textContent = `Slowed: ${slowSec}s`;
+      slowDebuffEl.setAttribute('aria-hidden', 'false');
+    } else {
+      slowDebuffEl.textContent = '';
+      slowDebuffEl.setAttribute('aria-hidden', 'true');
+    }
+
+    if (seaweedSec > 0 || slowSec > 0) {
+      buffPanelEl.style.display = 'flex';
+      buffPanelEl.setAttribute('aria-hidden', 'false');
+    } else {
+      buffPanelEl.style.display = 'none';
+      buffPanelEl.setAttribute('aria-hidden', 'true');
+    }
+  } catch (e) {
+    console.warn('[updateBuffDebuffUI] error', e);
+  }
+}
+
 function setMobileHudVisible(visible) {
   try {
     const shouldShow = !!visible && window.innerWidth <= 700;
@@ -4152,6 +4205,8 @@ function updateTimerDisplay() {
 
   // keep mobile pills in sync
   try { updateMobileHudValues(); } catch (e) {}
+  // update buff/debuff panel
+  try { updateBuffDebuffUI(); } catch (e) {}
 }
 
 function endGame(timeUp = false) {
@@ -4311,6 +4366,7 @@ function showGameEndedResult() {
     if (seaweedBoostTimer <= 0) {
       activeSeaweedBoost = false;
       seaweedBoostTimer = 0;
+      try { updateBuffDebuffUI(); } catch (e) {}
     }
   }
 
@@ -4395,6 +4451,7 @@ for (let i = floatingRewards.length - 1; i >= 0; i--) {
     logChest(t);
     if (t.type === "fake") {
       fakeTreasureSlowTimer = 180; // 3 seconds at 60fps
+      try { updateBuffDebuffUI(); } catch (e) {}
       floatingRewards.push({
         x: t.x + CHEST_SIZE/2,
         y: t.y,
@@ -4432,6 +4489,7 @@ for (let i = floatingRewards.length - 1; i >= 0; i--) {
         s.collected = true;
         activeSeaweedBoost = true;
         seaweedBoostTimer = SEAWEED_BOOST_DURATION;
+        try { updateBuffDebuffUI(); } catch (e) {}
         ASSETS.sounds.collect();
       }
     }
