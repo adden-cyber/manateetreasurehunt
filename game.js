@@ -3123,6 +3123,10 @@ const logoutBtn = document.getElementById('logout-btn');
 const startLogoutBtn = document.getElementById('start-logout-btn');
 
 function doLogout() {
+  try {
+    document.body.classList.remove('in-game');
+    document.body.classList.remove('pre-game');
+  } catch (e) {}
   // Optionally notify server to clear cookie: best-effort
   try { authFetch(`${backendBase()}/api/logout`, { method: 'POST', timeoutMs: 3000 }).catch(()=>{}); } catch(e){}
 
@@ -3955,6 +3959,11 @@ function initGame(relocateManatee = true) {
   gameActive = true;
   window.gameActive = true;
   window.__gameInitCompleted = true;
+  try {
+    // countdown finished -> remove pre-game; game running -> mark in-game so CSS hides bubbles
+    document.body.classList.remove('pre-game');
+    document.body.classList.add('in-game');
+  } catch (e) { /* ignore if not in DOM environment */ }
 
   // schedule the reveal to originate from the manatee center in CSS pixels
   try {
@@ -4212,6 +4221,11 @@ function updateTimerDisplay() {
 function endGame(timeUp = false) {
   if (isGameOver) return;
   isGameOver = true;
+  try {
+    // ensure bubble animation returns to normal once the game ends
+    document.body.classList.remove('in-game');
+    document.body.classList.remove('pre-game');
+  } catch (e) {}
 
   // compute elapsed since local gameStartTime (seconds)
   const elapsedSinceStart = Math.max(0, Math.floor((Date.now() - (gameStartTime || 0)) / 1000));
@@ -4268,6 +4282,10 @@ function endGame(timeUp = false) {
 function showGameEndedResult() {
   if (isGameOver) return;
   isGameOver = true;
+  try {
+    document.body.classList.remove('in-game');
+    document.body.classList.remove('pre-game');
+  } catch (e) {}
 
   // compute elapsed since local gameStartTime (seconds)
   const elapsedSinceStart = Math.max(0, Math.floor((Date.now() - (gameStartTime || 0)) / 1000));

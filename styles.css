@@ -634,18 +634,7 @@ button:active {
   100% { transform: scale(1); opacity: 1;}
 }
 
-/* REVEAL: circle-out reveal for countdown -> game transition
-   Insert this immediately after the Countdown Overlay / #countdown-number rules. */
-   #reveal-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 130000;               /* above canvas and most UI during the transition */
-    background: #000;              /* match the countdown black */
-    pointer-events: none;          /* don't block any input */
-    clip-path: circle(0% at 50% 50%);
-    -webkit-clip-path: circle(0% at 50% 50%);
-    opacity: 1;
-  }
+
   
   /* class applied to trigger the reveal */
   #reveal-overlay.revealing {
@@ -943,6 +932,14 @@ body::after {
     transform: translateY(-120vh) translateZ(0);
     opacity: 0;
   }
+}
+
+body.pre-game .bubble,
+body.in-game .bubble {
+  display: none !important;
+  animation-play-state: paused !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .bubble {
