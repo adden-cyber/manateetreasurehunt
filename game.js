@@ -3005,6 +3005,11 @@ function showScreen(target) {
     } else {
       showJoystick(false);
     }
+
+    try {
+            document.body.classList.add('no-bubbles');
+          } catch (e) { /* ignore */ }
+      
   } else {
     // Not the game screen: ensure HUD and joystick are hidden
     setHUDVisible(false);
@@ -3019,6 +3024,9 @@ function showScreen(target) {
         mobileEnd.setAttribute('aria-hidden', 'true');
       }
     } catch (e) { /* ignore */ }
+    try {
+            document.body.classList.remove('no-bubbles');
+          } catch (e) { /* ignore */ }
   }
 
   console.debug('[showScreen] switched to', targetEl.id, { gameActive: !!window.gameActive, preGameState });
