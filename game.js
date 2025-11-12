@@ -483,9 +483,20 @@ const imageManifest = [
 
 // Replace the existing BACKEND_URL line with this block
 const DEFAULT_BACKEND_URL = "http://192.168.0.114:3001/api";
+
+// Resolve backend URL robustly: prefer an explicit override, then a meta tag, otherwise the default.
+let _metaBackend = null;
+try {
+  if (typeof document !== 'undefined' && document.querySelector) {
+    const m = document.querySelector('meta[name="backend-url"]');
+    _metaBackend = m ? m.getAttribute('content') : null;
+  }
+} catch (e) {
+  console.warn('[BACKEND_URL] reading meta failed', e);
+}
+
 const BACKEND_URL = (typeof window !== 'undefined' && (
-  window.__BACKEND_URL_OVERRIDE ||
-  (document.querySelector && document.querySelector('meta[name=\"backend-url\"]')?.getAttribute('content'))
+  window.__BACKEND_URL_OVERRIDE || _metaBackend
 )) || DEFAULT_BACKEND_URL;
 
 /* 2) Small helper: fetch with timeout (prevents hanging on mobile) */
