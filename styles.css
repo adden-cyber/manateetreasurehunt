@@ -945,12 +945,6 @@ body::after {
   }
 }
 
-.no-bubbles .bubble {
-  display: none !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
-
 .bubble {
   position: fixed;
   left: var(--x, 10vw);
@@ -1654,19 +1648,11 @@ button:hover, .difficulty-btn:hover {
     top: 50%;
     transform: translateY(-50%);
     align-items: flex-end;
-    width: 150px;            /* smaller width for mobile */
-    font-size: 0.86rem;      /* smaller base font */
+    width: 172px;
   }
-  .status-timer {
-    padding: 6px;            /* slightly reduced padding */
-    min-width: 130px;
-    font-size: 0.82rem;
-    gap: 6px;
-  }
-  .status-label { min-width: 46px; font-size: 0.78rem; }
-  .status-value { font-size: 0.86rem; min-width: 36px; }
-  .status-bar { height: 7px; }
-  .status-bar-fill { transition: width 140ms linear; }
+  .status-timer { padding: 7px; min-width: 150px; font-size: 0.9rem; }
+  .status-label { min-width: 52px; font-size: 0.86rem; }
+  .status-value { font-size: 0.92rem; }
 }
 
 /* keep hidden during pre-game countdown to avoid overlap */
