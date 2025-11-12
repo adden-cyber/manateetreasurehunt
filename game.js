@@ -1049,7 +1049,6 @@ let activeSeaweedBoost = false;
 let seaweedBoostTimer = 0;
 const SEAWEED_BOOST_AMOUNT = 1.5; // 50% increase
 const SEAWEED_BOOST_DURATION = 8 * 60; // 8 seconds at 60fps
-const FAKE_SLOW_DURATION_FRAMES = 180;
 const keysPressed = {};
 let mermaids = []; // Array of all mermaids
 let collectibleSeaweeds = [];
@@ -4139,50 +4138,6 @@ function updateScoreDisplay() {
   try { updateMobileHudValues(); } catch (e) { /* ignore */ }
 }
 
-function updateStatusTimers() {
-  try {
-    const container = document.getElementById('status-timers');
-    if (!container) return;
-
-    // Only show while a game is active
-    const shouldShow = !!window.gameActive && !isGameOver;
-    container.style.display = shouldShow ? 'flex' : 'none';
-    if (!shouldShow) return;
-
-    // SEAWEED BOOST
-    const seaFrames = (typeof seaweedBoostTimer === 'number') ? seaweedBoostTimer : 0;
-    const seaMax = (typeof SEAWEED_BOOST_DURATION === 'number' && SEAWEED_BOOST_DURATION > 0) ? SEAWEED_BOOST_DURATION : (8*60);
-    const seaSecs = Math.ceil(seaFrames / 60);
-    const seaEl = document.getElementById('seaweed-time');
-    const seaFill = document.getElementById('seaweed-fill');
-    const seaRow = document.getElementById('seaweed-timer');
-
-    if (seaRow) seaRow.style.display = seaFrames > 0 ? 'flex' : 'none';
-    if (seaEl) seaEl.textContent = `${seaFrames > 0 ? seaSecs : 0}s`;
-    if (seaFill) {
-      const pct = seaMax > 0 ? Math.max(0, Math.min(1, seaFrames / seaMax)) : 0;
-      seaFill.style.width = `${Math.round(pct * 100)}%`;
-    }
-
-    // FAKE TREASURE SLOW
-    const fakeFrames = (typeof fakeTreasureSlowTimer === 'number') ? fakeTreasureSlowTimer : 0;
-    const fakeMax = (typeof FAKE_SLOW_DURATION_FRAMES === 'number') ? FAKE_SLOW_DURATION_FRAMES : 180;
-    const fakeSecs = Math.ceil(fakeFrames / 60);
-    const fakeEl = document.getElementById('fake-time');
-    const fakeFill = document.getElementById('fake-fill');
-    const fakeRow = document.getElementById('fake-timer');
-
-    if (fakeRow) fakeRow.style.display = fakeFrames > 0 ? 'flex' : 'none';
-    if (fakeEl) fakeEl.textContent = `${fakeFrames > 0 ? fakeSecs : 0}s`;
-    if (fakeFill) {
-      const pct = fakeMax > 0 ? Math.max(0, Math.min(1, fakeFrames / fakeMax)) : 0;
-      fakeFill.style.width = `${Math.round(pct * 100)}%`;
-    }
-  } catch (e) {
-    console.warn('[updateStatusTimers] failed', e);
-  }
-}
-
 function updateTimerDisplay() {
   // keep original guard conditions so we don't update during end/celebration/explosion
   if (!gameActive || celebrationActive || isGameOver || explosionActive) return;
@@ -4873,7 +4828,6 @@ if (!gameActive && (preGameCountdown > 0 || preGameState === "start")) {
 
     // IMPORTANT: draw confetti LAST so it's always on top of the scene and overlays
     // Uses captured confettiCameraX/Y for stable screen-space confetti
-    try { updateStatusTimers(); } catch (e) { console.warn('[render] updateStatusTimers failed', e); }
     drawConfetti();
   }
 
