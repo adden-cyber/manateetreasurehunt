@@ -660,46 +660,51 @@
   // Helper: check auth state (works whether isAuthenticated is a global binding or stored on window)
   async function ensureAuthState() {
     try {
-      // 1) If a direct global binding exists and is true, we're authenticated.
-      if (typeof isAuthenticated !== 'undefined' && isAuthenticated === true) {
-        return true;
-      }
+      // 1) quick global flags (fast-path)
+      if (typeof isAuthenticated !== 'undefined' && isAuthenticated === true) return true;
+      if (typeof window.isAuthenticated !== 'undefined' && window.isAuthenticated === true) return true;
 
-      // 2) If the global exists but is false, try to refresh using refreshAuth() if provided
-      //    (game.js may perform an async refreshAuth on load; calling it allows us to wait)
-      if (typeof isAuthenticated !== 'undefined' && isAuthenticated === false) {
-        if (typeof window.refreshAuth === 'function') {
-          try {
-            const refreshed = await window.refreshAuth();
-            if (refreshed) return true;
-          } catch (e) {
-            console.warn('[ensureAuthState] window.refreshAuth failed', e);
-          }
-        }
-        // fallthrough to server check below
-      }
-
-      // 3) Try window-scoped flag if present
-      if (typeof window.isAuthenticated !== 'undefined' && window.isAuthenticated === true) {
-        return true;
-      }
-      if (typeof window.isAuthenticated !== 'undefined' && window.isAuthenticated === false) {
-        // attempt refresh if exposed
-        if (typeof window.refreshAuth === 'function') {
-          try {
-            const refreshed = await window.refreshAuth();
-            if (refreshed) return true;
-          } catch (e) {
-            console.warn('[ensureAuthState] window.refreshAuth failed', e);
-          }
+      // if an in-page refresh helper exists, try it
+      if (typeof window.refreshAuth === 'function') {
+        try {
+          const refreshed = await window.refreshAuth();
+          if (refreshed) return true;
+        } catch (e) {
+          console.warn('[ensureAuthState] window.refreshAuth failed', e);
+          // continue to server check fallback
         }
       }
 
-      // 4) Final fallback: perform a best-effort server check (/api/me).
-      //    Use authFetch if available (it will include cookies); otherwise use fetch.
+      // 2) Prepare a safe backend base:
+      // Prefer a callable backendBase() if present; otherwise fall back to the meta tag or '/api'.
+      let base = '';
+      try {
+        if (typeof backendBase === 'function') {
+          base = backendBase();
+        } else {
+          const m = document.querySelector && document.querySelector('meta[name="backend-url"]');
+          base = m ? (m.getAttribute('content') || '') : '';
+        }
+        // normalize: strip trailing slash if any (we will add /api below)
+        if (base && base.endsWith('/')) base = base.slice(0, -1);
+      } catch (e) {
+        base = '';
+      }
+
+      // Construct the /api/me URL robustly
+      let meUrl;
+      if (!base) {
+        // If base is empty, use relative path (works with meta content "/api" or same-origin)
+        meUrl = '/api/me';
+      } else {
+        // If base already contains '/api' suffix, ensure no duplication
+        meUrl = base.endsWith('/api') ? `${base}/me` : `${base}/api/me`;
+      }
+
+      // 3) Try authFetch if available (it will add credentials); otherwise fetch.
       if (typeof authFetch === 'function') {
         try {
-          const res = await authFetch(`${backendBase()}/api/me`, { timeoutMs: 4000, credentials: 'include' });
+          const res = await authFetch(meUrl, { timeoutMs: 4000, credentials: 'include' });
           if (res && res.ok) {
             const data = await (res.json().catch(() => ({})));
             return !!(data && data.email);
@@ -709,7 +714,7 @@
         }
       } else {
         try {
-          const res = await fetch(`${backendBase()}/api/me`, { credentials: 'include' });
+          const res = await fetch(meUrl, { credentials: 'include' });
           if (res && res.ok) {
             const data = await (res.json().catch(() => ({})));
             return !!(data && data.email);
@@ -723,6 +728,63 @@
     }
     return false;
   }
+
+  /* --- INSERT: safe API helpers (paste immediately after ensureAuthState() in the inline DOMContentLoaded script) --- */
+function getApiEndpoint(path = '/') {
+  // Normalize path
+  if (!path.startsWith('/')) path = '/' + path;
+  // Prefer backendBase() if available, otherwise meta[name="backend-url"], otherwise relative /api path
+  try {
+    if (typeof backendBase === 'function') {
+      const base = String(backendBase() || '');
+      if (base) {
+        if (base.endsWith('/api')) {
+          // base already ends with /api -> append path without duplicating
+          return base + (path.startsWith('/api') ? path.slice(4) : path);
+        } else {
+          // ensure path begins with /api
+          return base + (path.startsWith('/api') ? path : '/api' + path);
+        }
+      }
+    }
+  } catch (e) {
+    // ignore and fallback
+  }
+
+  try {
+    const m = document.querySelector && document.querySelector('meta[name="backend-url"]');
+    const meta = m ? (m.getAttribute('content') || '') : '';
+    if (meta) {
+      const base = String(meta);
+      if (base.endsWith('/api')) {
+        return base + (path.startsWith('/api') ? path.slice(4) : path);
+      } else {
+        return base + (path.startsWith('/api') ? path : '/api' + path);
+      }
+    }
+  } catch (e) {
+    // ignore and fallback
+  }
+
+  // Final fallback: use relative /api path
+  return path.startsWith('/api') ? path : '/api' + path;
+}
+
+/* Minimal fetch-with-timeout fallback in case game.js's implementation isn't available yet.
+   Uses AbortController if present, otherwise falls back to plain fetch (no timeout).
+*/
+function fetchWithTimeoutPoly(url, options = {}, timeoutMs = 7000) {
+  if (typeof AbortController === 'undefined') {
+    // AbortController not supported -> fallback to plain fetch
+    return fetch(url, options);
+  }
+  const controller = new AbortController();
+  const signal = controller.signal;
+  const wrapped = Object.assign({}, options, { signal });
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, wrapped).finally(() => clearTimeout(timeoutId));
+}
+/* --- END INSERT --- */
 
   const mobileLeaderboardBtn = document.getElementById('mobile-leaderboard-btn');
   if (mobileLeaderboardBtn) {
@@ -757,22 +819,39 @@
       // Load leaderboard once (best-effort). Keep window.lastLeaderboard as cache.
       if (!window.lastLeaderboard) {
         try {
+          const endpoint = getApiEndpoint('/leaderboard');
+          let res = null;
+
           if (typeof authFetch === 'function') {
-            const res = await authFetch(`${backendBase()}/api/leaderboard`, { timeoutMs: 7000, credentials: 'include' });
-            if (res && res.ok) {
+            // Prefer authFetch when available (it handles cookies/credentials for you)
+            try {
+              res = await authFetch(endpoint, { timeoutMs: 7000, credentials: 'include' });
+            } catch (eAuth) {
+              console.warn('[mobile leaderboard] authFetch failed, falling back to fetchWithTimeoutPoly', eAuth);
+              res = null;
+            }
+          }
+
+          if (!res) {
+            // fallback to fetch (with timeout poly)
+            try {
+              res = await fetchWithTimeoutPoly(endpoint, { credentials: 'include' }, 7000);
+            } catch (ef) {
+              console.warn('[mobile leaderboard] fetchWithTimeoutPoly failed', ef);
+              res = null;
+            }
+          }
+
+          if (res && res.ok) {
+            // Prefer safeParseJson if game.js provided it, otherwise parse directly.
+            if (typeof safeParseJson === 'function') {
               window.lastLeaderboard = await safeParseJson(res) || {};
             } else {
-              window.lastLeaderboard = {};
-              console.warn('[mobile leaderboard] fetch returned non-ok', res && res.status);
+              window.lastLeaderboard = await res.json().catch(()=>({})) || {};
             }
           } else {
-            // fallback: fetch without authFetch
-            const res = await fetch(`${backendBase()}/api/leaderboard`, { credentials: 'include' });
-            if (res && res.ok) {
-              window.lastLeaderboard = await res.json().catch(()=>({}));
-            } else {
-              window.lastLeaderboard = {};
-            }
+            window.lastLeaderboard = {};
+            console.warn('[mobile leaderboard] fetch returned non-ok', res && res.status);
           }
         } catch (e) {
           console.warn('[mobile leaderboard] fetch failed', e);
