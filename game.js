@@ -343,7 +343,7 @@ function playRevealAnimation(durationMs = 700, origin = null) {
       // Nothing to animate; exit
       return;
     }
-
+    // 
     // Prepare overlay: visible, black, above everything
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
@@ -602,21 +602,6 @@ let failedLogsIntervalId = null;
 try { processFailedLogs().catch(console.warn); } catch (e) {}
 failedLogsIntervalId = setInterval(() => processFailedLogs().catch(console.warn), 30000);
 
-
-/* attachIfExists: convenience to addEventListener only if element exists */
-function attachIfExists(selectorOrEl, evt, handler, options) {
-  try {
-    const el = (typeof selectorOrEl === 'string') ? document.querySelector(selectorOrEl) : selectorOrEl;
-    if (el) el.addEventListener(evt, handler, options);
-    return el;
-  } catch (e) {
-    console.warn('[attachIfExists] failed for', selectorOrEl, e);
-    return null;
-  }
-}
-
-
-
 // Add this helper (place right after fetchWithTimeout or before wireFeedbackUI)
 async function sendFeedbackToServer(payload) {
   const url = `${backendBase()}/api/feedback`;
@@ -712,29 +697,6 @@ let sessionId = null;
 let userToken = null; // token not used in cookie-first mode
 let userEmail = localStorage.getItem('email') || null;
 let customPattern = [], TOTAL_TREASURES = 0, SEAWEED_COUNT = 0, BUBBLE_COUNT = 0, NUM_MINES = 0, GAME_TIME_SECONDS = 0;
-
-// Replace existing logStartGame()
-async function logStartGame() {
-  // non-blocking dry-run; do not set sessionId here
-  if (sessionId) return Promise.resolve();
-
-  try {
-    const res = await authFetch(`${backendBase()}/api/start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Dry-Run': '1' },
-      body: JSON.stringify({ difficulty: selectedDifficulty, email: userEmail }),
-      timeoutMs: 5000
-    });
-    if (!res || !res.ok) {
-      // non-blocking: don't fail init because of this
-      throw new Error(`start dry-run ${res && res.status}`);
-    }
-    return await safeParseJson(res);
-  } catch (err) {
-    console.warn('[game] logStartGame failed (non-blocking):', err);
-    return null;
-  }
-}
 
 /* Telemetry: send events with timeout and enqueue failed attempts for retry */
 function logChest(chest) {
@@ -844,18 +806,6 @@ function logEndGame(endedEarly = false) {
     console.warn('[logEndGame] failed, queued for retry', err);
     enqueueFailedLog({ url, method: 'POST', body: payload });
   });
-}
-
-// Replace existing getGameReport
-async function getGameReport() {
-  try {
-    const res = await authFetch(`${backendBase()}/api/report`, { timeoutMs: 7000 });
-    if (!res || !res.ok) return null;
-    return await safeParseJson(res);
-  } catch (e) {
-    console.warn('[getGameReport] failed', e);
-    return null;
-  }
 }
 
 // DOM references

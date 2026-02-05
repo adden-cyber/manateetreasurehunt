@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "A 2D minigame where a manatee hunts for treasures underwater",
   "scripts": {
-    "start": "http-server -o"
+    "start": "http-server -o",
+    "dev": "http-server -o"
   },
   "keywords": [
     "game",
@@ -16,7 +17,7 @@
   "dependencies": {
     "canvas-to-image": "^2.2.5",
     "cors": "^2.8.5",
-    "express": "^5.1.0",
+    "express": "^5.2.1",
     "http-server": "^14.1.1",
     "mongoose": "^8.18.2"
   }
